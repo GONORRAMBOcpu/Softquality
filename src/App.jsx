@@ -1,4 +1,6 @@
 import React, { useState } from "react";
+import { UploadProjectForm } from "./components/UploadProjectForm";
+
 import {
   RadarChart,
   PolarGrid,
@@ -148,6 +150,8 @@ export default function SoftQualityDashboard() {
 
       {/* Main */}
       <main style={{ flex: 1, padding: "24px 32px", overflow: "auto" }}>
+        <UploadProjectForm />
+
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
           <div>
