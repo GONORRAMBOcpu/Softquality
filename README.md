@@ -1,2 +1,0 @@
-# Softquality
-Software Quality
