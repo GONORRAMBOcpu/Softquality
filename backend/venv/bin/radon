@@ -1,0 +1,8 @@
+#!/bin/sh
+'''exec' "/home/julian/Documentos/softquality_documents/softquality-avances camilo/softquality-completo/backend/venv/bin/python" "$0" "$@"
+' '''
+import sys
+from radon import main
+if __name__ == '__main__':
+    sys.argv[0] = sys.argv[0].removesuffix('.exe')
+    sys.exit(main())
