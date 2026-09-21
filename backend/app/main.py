@@ -20,6 +20,14 @@ app = FastAPI(
     version="0.1.0",
     
 )
+# Agrega este bloque para darle permisos a React
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"], # El puerto exacto de tu Frontend
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.add_middleware(
     CORSMiddleware,

@@ -10,12 +10,14 @@ import os
 from app.schemas.metrica import MetricaCalculada
 from app.services.motor_analisis import MotorAnalisisPython
 from app.database import get_db
-from app.models.calidad import Analisis, MetricaResultado
+from app.models.calidad import Analisis, MetricaResultado, CaracteristicaISO
 from app.services.motor_ia import MotorIAService
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
 router = APIRouter()
 
-@router.post("/ejecutar", response_model=List[MetricaCalculada])
+@router.post("/ejecutar")
 async def ejecutar_analisis_zip(
     file: UploadFile = File(...), 
     db: Session = Depends(get_db)  # Inyectamos la conexión a la BD
@@ -68,7 +70,10 @@ async def ejecutar_analisis_zip(
             
         db.commit() # Guardamos todas las métricas en bloque
 
-        return resultados
+        return {
+        "id_analisis": nuevo_analisis.id_analisis,
+        "metricas": resultados
+    }
 @router.post("/{id_analisis}/generar-recomendaciones")
 async def interpretar_con_ia(id_analisis: int, db: Session = Depends(get_db)):
     """
@@ -106,4 +111,40 @@ async def interpretar_con_ia(id_analisis: int, db: Session = Depends(get_db)):
     return {
         "mensaje": "Interpretación completada con éxito",
         "recomendaciones": recomendaciones_json
+    }
+
+
+@router.get("/{id_analisis}/resultados")
+def obtener_resultados_dashboard(id_analisis: int, db: Session = Depends(get_db)):
+    """
+    Devuelve los resultados de un análisis específico formateados 
+    para que el Dashboard de React (Recharts) los pueda graficar.
+    """
+    # 1. Buscamos el registro del análisis en la base de datos
+    analisis = db.query(Analisis).filter(Analisis.id_analisis == id_analisis).first()
+    
+    if not analisis:
+        raise HTTPException(status_code=404, detail="Análisis no encontrado en la base de datos.")
+
+    # 2. Buscamos las métricas asociadas a este análisis uniendo la tabla de características ISO
+    resultados_db = (
+        db.query(MetricaResultado, CaracteristicaISO)
+        .join(CaracteristicaISO, MetricaResultado.id_caracteristica == CaracteristicaISO.id_caracteristica)
+        .filter(MetricaResultado.id_analisis == id_analisis)
+        .all()
+    )
+
+    # 3. Formateamos los datos cuantitativos exactamente como los espera la gráfica (Recharts)
+    # Por ahora enviamos el análisis actual. Más adelante podemos ampliar esta consulta
+    # para traer todas las versiones del proyecto (v1.0, v2.0) y ver la evolución.
+    metricas_formateadas = {"version": f"Análisis {id_analisis}"}
+    
+    for metrica, caracteristica in resultados_db:
+        # Esto creará llaves como: "Mantenibilidad": 85, "Seguridad": 90, etc.
+        metricas_formateadas[caracteristica.nombre_caracteristica] = metrica.valor_cuantitativo
+
+    # 4. Retornamos el paquete completo al frontend
+    return {
+        "recomendaciones_ia": analisis.recomendaciones_ia,
+        "metricas_historicas": [metricas_formateadas]
     }

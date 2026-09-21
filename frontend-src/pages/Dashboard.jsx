@@ -1,293 +1,113 @@
-import React, { useState } from "react";
-import {
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  Radar,
-  ResponsiveContainer,
-} from "recharts";
-import {
-  LayoutDashboard,
-  FolderKanban,
-  ClipboardList,
-  Sparkles,
-  Settings,
-  ChevronDown,
-  ArrowUpRight,
-  ArrowDownRight,
-  Minus,
-  ShieldCheck,
-} from "lucide-react";
+import React, { useState, useEffect } from 'react';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line 
+} from 'recharts';
 
-const INK = "#1B2430";
-const INK_SOFT = "#5B6472";
-const PAPER = "#FBFAF7";
-const LINE = "#DCD9D0";
-const BLUE = "#1E4B8C";
-const AMBER = "#B9791F";
-const GREEN = "#3A7D5C";
-const RED = "#AA3B33";
+// Los imports siempre van en la parte superior, fuera del componente
+import { obtenerResultadosDashboard } from '../services/api';
 
-const isoData = [
-  { characteristic: "Funcionalidad", short: "FUN", value: 82 },
-  { characteristic: "Fiabilidad", short: "FIA", value: 61 },
-  { characteristic: "Usabilidad", short: "USA", value: 74 },
-  { characteristic: "Eficiencia", short: "EFI", value: 55 },
-  { characteristic: "Mantenibilidad", short: "MAN", value: 68 },
-  { characteristic: "Portabilidad", short: "POR", value: 71 },
-  { characteristic: "Seguridad", short: "SEG", value: 48 },
-  { characteristic: "Compatibilidad", short: "COM", value: 77 },
-];
+const Dashboard = () => {
+  // Usaremos un ID de prueba (ej. 1) por ahora, luego lo enlazaremos dinámicamente con la subida del archivo
+  const idAnalisisActual = 1; 
 
-const versions = [
-  { id: "v2.1", date: "12 mar 2026", score: 58 },
-  { id: "v2.2", date: "02 may 2026", score: 63 },
-  { id: "v2.3", date: "20 ago 2026", score: 67, current: true },
-];
+  const [datosEvolucion, setDatosEvolucion] = useState([]);
+  const [recomendacionesIA, setRecomendacionesIA] = useState("Cargando análisis de Gemini...");
+  const [cargando, setCargando] = useState(true);
 
-const recommendations = [
-  {
-    characteristic: "Seguridad",
-    tag: "SEG",
-    tone: RED,
-    text: "El análisis estático reporta 6 endpoints sin validación de entrada. Priorizar antes de la siguiente versión: es la característica con menor puntaje.",
-  },
-  {
-    characteristic: "Eficiencia de desempeño",
-    tag: "EFI",
-    tone: AMBER,
-    text: "El tiempo de respuesta promedio subió 180ms respecto a v2.2. Revisar las consultas N+1 detectadas en el módulo de reportes.",
-  },
-  {
-    characteristic: "Fiabilidad",
-    tag: "FIA",
-    tone: AMBER,
-    text: "La cobertura de pruebas de los casos de error es baja (34%). Esto explica la caída frente a la meta interna del equipo.",
-  },
-];
+  useEffect(() => {
+    const cargarDatosReales = async () => {
+      try {
+        // Llamamos al backend a través del puente que acabamos de crear
+        const datosBackend = await obtenerResultadosDashboard(idAnalisisActual);
+        
+        // Asumiendo que el backend nos devuelve un array de métricas históricas
+        setDatosEvolucion(datosBackend.metricas_historicas || []);
+        
+        // Leemos las recomendaciones que Gemini guardó en la tabla ANALISIS
+        if (datosBackend.recomendaciones_ia) {
+          // Extraemos el texto dependiendo de cómo lo haya devuelto tu backend
+          setRecomendacionesIA(datosBackend.recomendaciones_ia.mensaje_general || JSON.stringify(datosBackend.recomendaciones_ia));
+        } else {
+          setRecomendacionesIA("No hay recomendaciones generadas por la IA para este análisis.");
+        }
+      } catch (error) {
+        console.error("No se pudo conectar con la base de datos", error);
+        setRecomendacionesIA("Error de conexión. Verifica que el backend de FastAPI esté encendido y que el endpoint exista.");
+      } finally {
+        setCargando(false);
+      }
+    };
 
-const cmmiAreas = [
-  { name: "Gestión de requisitos", answered: 8, total: 8 },
-  { name: "Planificación de proyecto", answered: 6, total: 8 },
-  { name: "Aseguramiento de calidad", answered: 3, total: 8 },
-  { name: "Gestión de configuración", answered: 0, total: 6 },
-];
-
-const navItems = [
-  { label: "Proyectos", icon: FolderKanban },
-  { label: "Dashboard", icon: LayoutDashboard, active: true },
-  { label: "Checklist CMMI", icon: ClipboardList },
-  { label: "Recomendaciones IA", icon: Sparkles },
-  { label: "Configuración", icon: Settings },
-];
-
-function Trend({ current, previous }) {
-  const diff = current - previous;
-  const Icon = diff > 0 ? ArrowUpRight : diff < 0 ? ArrowDownRight : Minus;
-  const color = diff > 0 ? GREEN : diff < 0 ? RED : INK_SOFT;
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 2, color, fontSize: 13, fontFamily: "'IBM Plex Mono', monospace" }}>
-      <Icon size={14} strokeWidth={2.5} />
-      {diff === 0 ? "0" : (diff > 0 ? "+" : "") + diff}
-    </span>
-  );
-}
-
-export default function SoftQualityDashboard() {
-  const [activeVersion, setActiveVersion] = useState("v2.3");
+    cargarDatosReales();
+  }, []);
 
   return (
-    <div style={{ fontFamily: "'IBM Plex Sans', ui-sans-serif, system-ui", background: PAPER, color: INK, minHeight: 640, display: "flex" }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
-        .sq-scoresheet { background-image: linear-gradient(${LINE}1a 1px, transparent 1px), linear-gradient(90deg, ${LINE}1a 1px, transparent 1px); background-size: 28px 28px; }
-        .sq-navitem { transition: background 0.15s ease, color 0.15s ease; }
-        .sq-navitem:hover { background: #F0EEE7; }
-        .sq-card { border: 1px solid ${LINE}; background: #fff; }
-        .sq-btn { transition: opacity 0.15s ease; }
-        .sq-btn:hover { opacity: 0.85; }
-      `}</style>
-
-      {/* Sidebar */}
-      <aside style={{ width: 220, borderRight: `1px solid ${LINE}`, padding: "24px 16px", display: "flex", flexDirection: "column", gap: 28, flexShrink: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 8px" }}>
-          <div style={{ width: 26, height: 26, border: `2px solid ${INK}`, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <ShieldCheck size={15} color={INK} strokeWidth={2.2} />
-          </div>
-          <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: "-0.01em" }}>SoftQuality</span>
+    <div style={{ padding: '2rem', fontFamily: 'sans-serif', maxWidth: '1200px', margin: '0 auto' }}>
+      
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #eee', paddingBottom: '1rem' }}>
+        <div>
+          <h1 style={{ margin: 0, color: '#004080' }}>Dashboard de Calidad - SoftQuality</h1>
+          <p style={{ margin: '5px 0 0 0', color: '#666' }}>Basado en ISO/IEC 25010</p>
         </div>
+        
+        <button style={{
+          backgroundColor: '#28a745', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold'
+        }}>
+          📝 Responder Checklist CMMI
+        </button>
+      </header>
 
-        <nav style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          {navItems.map(({ label, icon: Icon, active }) => (
-            <div
-              key={label}
-              className="sq-navitem"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "9px 10px",
-                borderRadius: 6,
-                fontSize: 13.5,
-                fontWeight: active ? 600 : 500,
-                color: active ? INK : INK_SOFT,
-                background: active ? "#F0EEE7" : "transparent",
-                cursor: "pointer",
-              }}
-            >
-              <Icon size={16} strokeWidth={2} />
-              {label}
-            </div>
-          ))}
-        </nav>
-
-        <div style={{ marginTop: "auto", padding: "12px 10px", border: `1px dashed ${LINE}`, borderRadius: 6, fontSize: 11.5, color: INK_SOFT, lineHeight: 1.5 }}>
-          Herramienta académica de diagnóstico. No certifica cumplimiento ISO/IEC 25010 ni nivel CMMI oficial.
-        </div>
-      </aside>
-
-      {/* Main */}
-      <main style={{ flex: 1, padding: "24px 32px", overflow: "auto" }}>
-        {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
-          <div>
-            <div style={{ fontSize: 12, color: INK_SOFT, fontFamily: "'IBM Plex Mono', monospace", marginBottom: 4 }}>PROYECTO / 03</div>
-            <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, letterSpacing: "-0.01em" }}>Sistema de Gestión de Inventarios</h1>
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '2rem', marginTop: '2rem' }}>
+        
+        {/* Columna Izquierda: Gráficos Cuantitativos */}
+        <section>
+          <h3>📈 Evolución por Versiones (ISO/IEC 25010)</h3>
+          <div style={{ backgroundColor: '#fff', padding: '1rem', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', height: '400px' }}>
+            {cargando ? (
+              <p style={{ textAlign: 'center', marginTop: '100px' }}>Consultando base de datos...</p>
+            ) : datosEvolucion.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={datosEvolucion} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="version" />
+                  <YAxis domain={[0, 100]} />
+                  <Tooltip />
+                  <Legend />
+                  <Line type="monotone" dataKey="Mantenibilidad" stroke="#8884d8" strokeWidth={3} />
+                  <Line type="monotone" dataKey="Seguridad" stroke="#82ca9d" strokeWidth={3} />
+                  <Line type="monotone" dataKey="Flexibilidad" stroke="#ffc658" strokeWidth={3} />
+                  <Line type="monotone" dataKey="Fiabilidad" stroke="#ff7300" strokeWidth={3} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <p style={{ textAlign: 'center', marginTop: '100px', color: '#cc0000' }}>No se encontraron métricas.</p>
+            )}
           </div>
-          <div
-            className="sq-btn"
-            style={{
-              display: "flex", alignItems: "center", gap: 6, padding: "8px 12px",
-              border: `1px solid ${INK}`, borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer",
-            }}
-          >
-            {activeVersion} — actual
-            <ChevronDown size={14} />
-          </div>
-        </div>
+        </section>
 
-        {/* Top row: radar + score summary */}
-        <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 16, marginBottom: 16 }}>
-          <div className="sq-card sq-scoresheet" style={{ borderRadius: 8, padding: 20 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-              <h2 style={{ fontSize: 13.5, fontWeight: 600, margin: 0, textTransform: "none" }}>Características ISO/IEC 25010</h2>
-              <span style={{ fontSize: 11.5, color: INK_SOFT, fontFamily: "'IBM Plex Mono', monospace" }}>{activeVersion}</span>
-            </div>
-            <ResponsiveContainer width="100%" height={260}>
-              <RadarChart data={isoData} outerRadius="75%">
-                <PolarGrid stroke={LINE} />
-                <PolarAngleAxis
-                  dataKey="short"
-                  tick={{ fill: INK_SOFT, fontSize: 11, fontFamily: "IBM Plex Mono" }}
-                />
-                <Radar dataKey="value" stroke={BLUE} fill={BLUE} fillOpacity={0.18} strokeWidth={2} />
-              </RadarChart>
-            </ResponsiveContainer>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 14px", marginTop: 4, borderTop: `1px solid ${LINE}`, paddingTop: 10 }}>
-              {isoData.map((d) => (
-                <span key={d.short} style={{ fontSize: 11, fontFamily: "'IBM Plex Mono', monospace", color: INK_SOFT }}>
-                  {d.short} <b style={{ color: INK }}>{d.value}</b>
-                </span>
-              ))}
-            </div>
+        {/* Columna Derecha: IA y Cualitativo */}
+        <section style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          
+          <div style={{ backgroundColor: '#f4f1fa', padding: '1.5rem', borderRadius: '8px', borderLeft: '5px solid #6b21a8' }}>
+            <h3 style={{ marginTop: 0, color: '#6b21a8' }}>🧠 Análisis Cualitativo (IA)</h3>
+            <p style={{ fontSize: '0.95rem', lineHeight: '1.6', color: '#333' }}>
+              {recomendacionesIA}
+            </p>
+            <small style={{ color: '#888' }}>* La IA interpreta los datos obtenidos, no calcula las métricas.</small>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div className="sq-card" style={{ borderRadius: 8, padding: 20, flex: 1 }}>
-              <div style={{ fontSize: 12, color: INK_SOFT, marginBottom: 2 }}>Puntaje global de calidad</div>
-              <div style={{ display: "flex", alignItems: "flex-end", gap: 10 }}>
-                <span style={{ fontSize: 42, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", lineHeight: 1 }}>67</span>
-                <span style={{ fontSize: 15, color: INK_SOFT, marginBottom: 4 }}>/ 100</span>
-                <span style={{ marginBottom: 6 }}><Trend current={67} previous={63} /></span>
-              </div>
-              <div style={{ height: 6, background: "#EFEDE6", borderRadius: 3, marginTop: 14, overflow: "hidden" }}>
-                <div style={{ width: "67%", height: "100%", background: BLUE }} />
-              </div>
-              <div style={{ marginTop: 14, fontSize: 12, color: INK_SOFT, lineHeight: 1.5 }}>
-                Punto más débil: <b style={{ color: RED }}>Seguridad (48)</b> · Punto más fuerte: <b style={{ color: GREEN }}>Funcionalidad (82)</b>
-              </div>
-            </div>
-
-            <div className="sq-card" style={{ borderRadius: 8, padding: 20 }}>
-              <div style={{ fontSize: 12, color: INK_SOFT, marginBottom: 10 }}>Evolución entre versiones</div>
-              <div style={{ display: "flex", gap: 8, alignItems: "flex-end", height: 60 }}>
-                {versions.map((v) => (
-                  <div key={v.id} style={{ flex: 1, textAlign: "center" }}>
-                    <div style={{
-                      height: v.score * 0.55,
-                      background: v.current ? BLUE : "#D8DEE8",
-                      borderRadius: "3px 3px 0 0",
-                      marginBottom: 6,
-                    }} />
-                    <div style={{ fontSize: 10.5, fontFamily: "'IBM Plex Mono', monospace", color: INK_SOFT }}>{v.id}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom row: recommendations + cmmi */}
-        <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 16 }}>
-          <div className="sq-card" style={{ borderRadius: 8, padding: 20 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-              <Sparkles size={15} color={BLUE} />
-              <h2 style={{ fontSize: 13.5, fontWeight: 600, margin: 0 }}>Recomendaciones del motor de IA</h2>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {recommendations.map((r) => (
-                <div key={r.tag} style={{ display: "flex", gap: 12, padding: "10px 0", borderTop: `1px solid ${LINE}` }}>
-                  <span style={{
-                    flexShrink: 0, fontSize: 10.5, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 600,
-                    color: "#fff", background: r.tone, padding: "3px 7px", borderRadius: 4, height: "fit-content",
-                  }}>
-                    {r.tag}
-                  </span>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{r.characteristic}</div>
-                    <div style={{ fontSize: 13, color: INK_SOFT, lineHeight: 1.5 }}>{r.text}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div style={{ fontSize: 11, color: INK_SOFT, marginTop: 12, fontStyle: "italic" }}>
-              Generado a partir de métricas ya calculadas. La IA interpreta resultados, no los calcula.
-            </div>
+          <div style={{ backgroundColor: '#e6f4ea', padding: '1.5rem', borderRadius: '8px', borderLeft: '5px solid #28a745' }}>
+            <h3 style={{ marginTop: 0, color: '#1e7e34' }}>🏆 Madurez del Proceso (CMMI)</h3>
+            <p><strong>Nivel Actual:</strong> Pendiente de evaluación.</p>
+            <p style={{ fontSize: '0.85rem', color: '#555' }}>
+              Completa el checklist en la parte superior para evaluar las prácticas de tu equipo de desarrollo.
+            </p>
           </div>
 
-          <div className="sq-card" style={{ borderRadius: 8, padding: 20 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-              <ClipboardList size={15} color={BLUE} />
-              <h2 style={{ fontSize: 13.5, fontWeight: 600, margin: 0 }}>Checklist de madurez CMMI</h2>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {cmmiAreas.map((a) => {
-                const pct = Math.round((a.answered / a.total) * 100);
-                return (
-                  <div key={a.name}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 4 }}>
-                      <span>{a.name}</span>
-                      <span style={{ color: INK_SOFT, fontFamily: "'IBM Plex Mono', monospace" }}>{a.answered}/{a.total}</span>
-                    </div>
-                    <div style={{ height: 5, background: "#EFEDE6", borderRadius: 3, overflow: "hidden" }}>
-                      <div style={{ width: `${pct}%`, height: "100%", background: pct === 100 ? GREEN : pct === 0 ? LINE : AMBER }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div
-              className="sq-btn"
-              style={{
-                marginTop: 16, textAlign: "center", padding: "9px 0", border: `1px solid ${INK}`,
-                borderRadius: 6, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-              }}
-            >
-              Continuar checklist
-            </div>
-          </div>
-        </div>
-      </main>
+        </section>
+      </div>
     </div>
   );
-}
+};
+
+export default Dashboard;
