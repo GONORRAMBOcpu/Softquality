@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 // Importamos las páginas de la carpeta pages/
 import Registrarse from './pages/Registrarse';
 import SubirProyecto from './pages/SubirProyecto';
+import HistorialProyectos from './pages/HistorialProyectos';
 import Dashboard from './pages/Dashboard';
 
 const App = () => {
@@ -23,21 +24,26 @@ const App = () => {
             SoftQuality 🚀
           </div>
           <Link to="/" style={{ color: 'white', textDecoration: 'none' }}>Autenticación</Link>
-          <Link to="/subir" style={{ color: 'white', textDecoration: 'none' }}>Analizar Proyecto</Link>
+          <Link to="/subir" style={{ color: 'white', textDecoration: 'none' }}>Subir Proyecto</Link>
+          <Link to="/proyectos" style={{ color: 'white', textDecoration: 'none' }}>Mirar Proyectos</Link>
           <Link to="/dashboard" style={{ color: 'white', textDecoration: 'none' }}>Dashboard</Link>
         </nav>
 
         {/* Contenedor dinámico de las rutas */}
         <main>
           <Routes>
-            {/* Ruta 1: El punto de entrada será el Registro/Login */}
-            <Route path="/" element={<Registrarse />} />
+            {/* Ruta 1: Registro/Login (Módulo de tus compañeros) */}
+            <Route path="/" element={React.createElement(Registrarse)} />
             
-            {/* Ruta 2: La pantalla de ingesta del .zip */}
-            <Route path="/subir" element={<SubirProyecto />} />
+            {/* Ruta 2: Caso de Uso "Subir Proyecto" (Gestión de proyecto + ingesta del .zip) */}
+            <Route path="/subir" element={React.createElement(SubirProyecto)} />
+
+            {/* Ruta 3: Caso de Uso "Mirar proyectos y eliminar" */}
+            <Route path="/proyectos" element={React.createElement(HistorialProyectos)} />
             
-            {/* Ruta 3: El visualizador de ISO 25010 y CMMI */}
-            <Route path="/dashboard" element={<Dashboard />} />
+            {/* Ruta 4: El visualizador de ISO 25010 y CMMI */}
+            <Route path="/dashboard" element={React.createElement(Dashboard)} />
+            <Route path="/dashboard/:id" element={React.createElement(Dashboard)} />
           </Routes>
         </main>
 
