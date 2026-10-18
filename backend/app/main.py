@@ -1,15 +1,17 @@
 """
 Entrypoint de SoftQuality API.
-Por ahora solo registra el router de autenticación (caso de uso: Registrarse).
-Los routers de Subir Proyecto, Verificar proyecto, etc. se agregan como módulos
-independientes (regla 2 del prompt maestro), cada uno en su propio archivo.
+- /api/auth/*      público (registrarse, login) y /me protegido.
+- /api/analisis/*  protegido: exige un JWT válido (Authorization: Bearer <token>).
+- /health          público.
 """
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import analisis
+
+from app.api.routes import analisis, auth
+from app.core.config import CORS_ORIGINS
+from app.core.security import get_current_user
 from app.database import Base, engine
-from app.models import calidad, usuario # Importamos los modelos para que SQLAlchemy los detecte
-from app.api.routes import auth
+from app.models import calidad, usuario  # Importamos los modelos para que SQLAlchemy los detecte
 
 # En desarrollo: crea las tablas si no existen. En producción se usa Alembic.
 Base.metadata.create_all(bind=engine)
@@ -17,27 +19,24 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="SoftQuality API",
     description="Plataforma para evaluar calidad de software bajo ISO/IEC 25010 y CMMI.",
-    version="0.1.0",
-    
+    version="0.2.0",
 )
-# Agrega este bloque para darle permisos a React
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"], # El puerto exacto de tu Frontend
+    allow_origins=CORS_ORIGINS,  # configurable con CORS_ORIGINS en .env
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # frontend Vite en desarrollo
-    allow_methods=["*"],
-    allow_headers=["*"],
+app.include_router(auth.router, prefix="/api")
+app.include_router(
+    analisis.router,
+    prefix="/api/analisis",
+    tags=["Análisis"],
+    dependencies=[Depends(get_current_user)],  # todo /api/analisis/* exige sesión
 )
-
-app.include_router(auth.router)
-app.include_router(analisis.router, prefix="/api/analisis", tags=["Análisis"])
 
 
 @app.get("/health", tags=["Sistema"])
