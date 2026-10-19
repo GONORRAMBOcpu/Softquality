@@ -7,10 +7,9 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
-# Recargamos las variables del archivo .env (sin pisar las inyectadas por Docker)
-load_dotenv(override=False)
+# Recargamos las variables del archivo .env
+load_dotenv(override=True)
 
-# Catálogo de Áreas de Proceso CMMI evaluadas en el formulario académico
 CATALOGO_PRACTICAS_CMMI = {
     "reqm": {
         "area": "Gestión de Requisitos (REQM)",
@@ -44,11 +43,11 @@ class MotorIAService:
             raise ValueError("La API Key de Gemini no está configurada en el archivo .env")
 
         self.client = genai.Client(api_key=self.api_key)
-        # Esquema de reintentos con espera progresiva para superar errores 503 UNAVAILABLE
+        # Esquema de reintentos para proteger la cuota gratuita ante picos 503
         self.plan_intentos = [
             ("gemini-3.6-flash", 2),
-            ("gemini-3.6-flash", 4),
-            ("gemini-3.8-flash", 0),
+            ("gemini-3.8-flash", 2),
+            ("gemini-3.6-flash", 0),
         ]
 
     def _formatear_resumen_cmmi(self, evaluacion_cmmi: Optional[dict]) -> dict:
@@ -78,53 +77,61 @@ class MotorIAService:
     def _interpretar_localmente_por_respaldo(
         self, metricas_db: list, evaluacion_cmmi: Optional[dict] = None
     ) -> dict:
-        resumen_partes = []
-        recomendaciones_focalizadas = []
+        """
+        Respaldo amigable y determinístico: explica exactamente por qué se obtuvo cada puntaje
+        (incluyendo archivo, línea y archivos faltantes) cuando la API gratuita está ocupada.
+        """
+        explicaciones = []
+        todas_en_100 = True
 
-        if isinstance(metricas_db, list):
+        if isinstance(metricas_db, list) and len(metricas_db) > 0:
             for item in metricas_db:
                 if isinstance(item, dict):
                     nombre = (
-                        item.get("caracteristica_iso")
-                        or item.get("nombre_metrica")
+                        item.get("nombre_metrica")
                         or item.get("caracteristica")
-                        or "Métrica ISO 25010"
+                        or "Característica"
                     )
-                    valor = item.get("puntaje_0_a_100")
-                    if valor is None:
-                        valor = item.get("valor") if "valor" in item else item.get("valor_cuantitativo", 0)
-                    evidencia = item.get("evidencia_tecnica") or item.get("unidad") or ""
+                    valor = (
+                        item.get("valor")
+                        if "valor" in item
+                        else item.get("valor_cuantitativo", 0)
+                    )
+                    evidencia = (
+                        item.get("unidad")
+                        or item.get("descripcion")
+                        or item.get("evidencia")
+                        or ""
+                    )
+
+                    try:
+                        if float(valor) < 100.0:
+                            todas_en_100 = False
+                    except Exception:
+                        pass
 
                     if evidencia:
-                        resumen_partes.append(f"{nombre}: {valor}/100 ({evidencia})")
+                        explicaciones.append(f"• {nombre} ({valor}/100): {evidencia}")
                     else:
-                        resumen_partes.append(f"{nombre}: {valor}/100")
+                        explicaciones.append(f"• {nombre}: {valor}/100")
 
-                    if isinstance(valor, (int, float)) and valor < 80:
-                        if "mantenibilidad" in str(nombre).lower():
-                            recomendaciones_focalizadas.append(
-                                "reducir la complejidad ciclomática dividiendo funciones extensas en bloques más pequeños"
-                            )
-                        elif "seguridad" in str(nombre).lower():
-                            recomendaciones_focalizadas.append(
-                                "fijar versiones exactas (==) en requirements.txt y evitar patrones riesgosos o secretos en código"
-                            )
-                        elif "flexibilidad" in str(nombre).lower():
-                            recomendaciones_focalizadas.append(
-                                "disminuir el acoplamiento de importaciones entre módulos y simplificar parámetros de funciones"
-                            )
-                        elif "fiabilidad" in str(nombre).lower():
-                            recomendaciones_focalizadas.append(
-                                "incluir el reporte coverage.xml con pruebas unitarias y ampliar el manejo de excepciones try/except"
-                            )
-
-        detalle_medido = " | ".join(resumen_partes) if resumen_partes else "Métricas procesadas"
-        if recomendaciones_focalizadas:
-            sugerencia_iso = "Para elevar los puntajes hacia 100/100 se recomienda: " + "; ".join(recomendaciones_focalizadas) + "."
+        if todas_en_100 and explicaciones:
+            cierre_iso = (
+                "🎉 ¡Felicitaciones! Has corregido todas las observaciones y tu proyecto alcanzó el 100/100 "
+                "en las 4 características de calidad ISO/IEC 25010."
+            )
         else:
-            sugerencia_iso = "Las 4 características evaluadas presentan un nivel sobresaliente (≥ 80/100); se sugiere mantener las pruebas continuas y la modularidad actual."
+            cierre_iso = (
+                "💡 ¿Cómo subir al 100% en tu próxima versión?: Corrige exactamente los archivos y líneas "
+                "indicados arriba (y agrega 'requirements.txt' o 'coverage.xml' si aparecen como faltantes) "
+                "y vuelve a subir el archivo .zip."
+            )
 
-        analisis_iso = f"Diagnóstico técnico ISO/IEC 25010 (escala 0 a 100): {detalle_medido}. {sugerencia_iso}"
+        analisis_iso = (
+            "Resumen amigable del porqué de tu puntuación:\n"
+            + "\n".join(explicaciones)
+            + f"\n\n{cierre_iso}"
+        )
 
         resumen_cmmi = self._formatear_resumen_cmmi(evaluacion_cmmi)
         if resumen_cmmi["tiene_cmmi"]:
@@ -132,18 +139,17 @@ class MotorIAService:
                 detalle_pendientes = "; ".join(resumen_cmmi["pendientes"])
                 analisis_cmmi = (
                     f"Nivel alcanzado: {resumen_cmmi['nivel']}. "
-                    f"Para elevar la madurez del proceso del equipo, se deben fortalecer las áreas donde se respondió 'No': {detalle_pendientes}."
+                    f"Para mejorar el proceso del equipo, enfócate en las áreas donde respondiste 'No': {detalle_pendientes}."
                 )
             else:
                 analisis_cmmi = (
                     f"Nivel alcanzado: {resumen_cmmi['nivel']}. "
-                    "El equipo cumple con las 5 áreas de proceso evaluadas (REQM, PP, PMC, CM y VER/VAL). "
-                    "Se recomienda mantener la trazabilidad documental y la automatización continua en próximas versiones."
+                    "¡Excelente! El equipo cumple con las 5 áreas de proceso evaluadas (REQM, PP, PMC, CM y VER/VAL)."
                 )
         else:
             analisis_cmmi = None
 
-        mensaje_general = f"{analisis_iso} {analisis_cmmi}" if analisis_cmmi else analisis_iso
+        mensaje_general = f"{analisis_iso}\n\n{analisis_cmmi}" if analisis_cmmi else analisis_iso
 
         return {
             "analisis_iso": analisis_iso,
@@ -158,34 +164,36 @@ class MotorIAService:
 
         if resumen_cmmi["tiene_cmmi"]:
             bloque_cmmi = f"""
-            El equipo completó la autoevaluación de madurez de procesos CMMI obteniendo: "{resumen_cmmi['nivel']}".
-            - Áreas de proceso cumplidas (Sí): {json.dumps(resumen_cmmi['cumplidas'], ensure_ascii=False)}
-            - Áreas de proceso NO cumplidas (No) y acciones sugeridas: {json.dumps(resumen_cmmi['pendientes'], ensure_ascii=False)}
+            El equipo completó la autoevaluación CMMI obteniendo: "{resumen_cmmi['nivel']}".
+            - Áreas cumplidas (Sí): {json.dumps(resumen_cmmi['cumplidas'], ensure_ascii=False)}
+            - Áreas NO cumplidas (No) y acciones sugeridas: {json.dumps(resumen_cmmi['pendientes'], ensure_ascii=False)}
             """
-            instruccion_cmmi = "Redacta en 'analisis_cmmi' recomendaciones prácticas y claras enfocadas específicamente en las áreas de proceso CMMI donde el equipo respondió 'No'."
+            instruccion_cmmi = "Redacta en 'analisis_cmmi' recomendaciones amigables para las áreas CMMI donde el equipo respondió 'No'."
         else:
             bloque_cmmi = "El equipo aún no ha respondido el cuestionario de procesos CMMI."
             instruccion_cmmi = "Coloca null en 'analisis_cmmi' porque aún no hay evaluación CMMI registrada."
 
         prompt = f"""
-        Eres un auditor académico experto en calidad de software bajo la norma ISO/IEC 25010 y el modelo CMMI en la plataforma SoftQuality.
+        Eres un tutor amigable de calidad de software en la plataforma académica SoftQuality (ISO/IEC 25010 y CMMI).
         
-        1. Puntajes normalizados (escala 0 a 100) y evidencia técnica calculados de forma determinística por el motor estático para las 4 características de la norma ISO/IEC 25010 (Mantenibilidad, Seguridad, Flexibilidad y Fiabilidad):
+        1. Resultados exactos calculados por nuestro analizador de código:
         {json.dumps(metricas_db, ensure_ascii=False)}
 
         2. Evaluación de procesos del equipo (CMMI):
         {bloque_cmmi}
 
-        REGLAS ESTRICTAS DE NEGOCIO:
-        - No inventes ni recalcules métricas numéricas. Interpreta únicamente los puntajes (0 a 100) y la evidencia técnica recibida para Mantenibilidad, Seguridad, Flexibilidad y Fiabilidad.
-        - No otorgues certificaciones oficiales; es un diagnóstico académico de mejora continua.
-        - Separa claramente la evaluación técnica del producto (ISO/IEC 25010) de la evaluación de procesos (CMMI).
+        INSTRUCCIONES OBLIGATORIAS PARA 'analisis_iso':
+        - Explica en palabras sencillas y muy amigables para el estudiante el PORQUÉ obtuvo esa puntuación en cada una de las 4 características (Mantenibilidad, Seguridad, Flexibilidad y Fiabilidad).
+        - Si una característica tiene menos de 100 puntos, DEBES mencionar explícitamente cuántos puntos perdió, el NOMBRE DEL ARCHIVO y el NÚMERO DE LÍNEA EXACTO que viene en la evidencia (por ejemplo: "En Seguridad sacaste 80/100 porque en 'pagos.py' (línea 8) dejaste una API Key pública (-10 pts) y te faltó incluir el archivo 'requirements.txt' (-10 pts)").
+        - Si falta 'coverage.xml' o 'requirements.txt', explícalo claramente indicando cuántos puntos restó.
+        - Al final de 'analisis_iso', dile al usuario que si corrige esas líneas exactas y agrega los archivos faltantes en la siguiente versión, su puntuación subirá automáticamente al 100%. Si ya tiene 100/100 en todas, felicítalo.
+        - NO inventes ni recalcules notas numéricas.
         - {instruccion_cmmi}
 
         Responde ÚNICAMENTE con un objeto JSON válido con esta estructura exacta:
         {{
-            "analisis_iso": "Párrafo claro interpretando los 4 puntajes (0 a 100) y hallazgos técnicos de Mantenibilidad, Seguridad, Flexibilidad y Fiabilidad según ISO/IEC 25010.",
-            "analisis_cmmi": "Párrafo claro con las recomendaciones de mejora de procesos según el checklist CMMI (o null si no aplica).",
+            "analisis_iso": "Explicación amigable característica por característica justificando el puntaje con archivo, línea exacta y cómo llegar al 100%.",
+            "analisis_cmmi": "Recomendaciones amigables del proceso CMMI (o null si no aplica).",
             "mensaje_general": "Resumen integrado de ambos análisis."
         }}
         """
@@ -199,8 +207,10 @@ class MotorIAService:
                     contents=prompt,
                     config=types.GenerateContentConfig(
                         response_mime_type="application/json",
-                        temperature=0.3,
-                        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+                        temperature=0.2,
+                        automatic_function_calling=types.AutomaticFunctionCallingConfig(
+                            disable=True
+                        ),
                     ),
                 )
 
@@ -209,19 +219,21 @@ class MotorIAService:
                     texto_limpio = texto_limpio.strip("`").removeprefix("json").strip()
 
                 print(
-                    f"✅ Recomendaciones separadas (ISO 25010 4 características + CMMI) generadas con '{modelo_actual}' (intento {idx}/{total_intentos})"
+                    f"✅ Justificación detallada generada con '{modelo_actual}' (intento {idx}/{total_intentos})"
                 )
                 return json.loads(texto_limpio)
 
-            except Exception:
+            except Exception as e:
                 if segundos_espera > 0:
                     print(
-                        f"⏳ '{modelo_actual}' ocupado (503). Esperando {segundos_espera}s antes del intento {idx + 1}/{total_intentos}..."
+                        f"⏳ '{modelo_actual}' ocupado. Esperando {segundos_espera}s antes del intento {idx + 1}/{total_intentos}..."
                     )
                     time.sleep(segundos_espera)
                     continue
 
                 print(
-                    f"⚠️ Servidores de Google con alta demanda tras {total_intentos} intentos. Usando motor de auditoría local."
+                    f"⚠️ API gratuita ocupada tras {total_intentos} intentos. Usando explicación amigable local con archivo y línea exacta."
                 )
-                return self._interpretar_localmente_por_respaldo(metricas_db, evaluacion_cmmi)
+                return self._interpretar_localmente_por_respaldo(
+                    metricas_db, evaluacion_cmmi
+                )

@@ -8,8 +8,8 @@ import RutaProtegida from './components/RutaProtegida';
 import Login from './pages/Login';
 import Registrarse from './pages/Registrarse';
 import SubirProyecto from './pages/SubirProyecto';
-import HistorialProyectos from './pages/HistorialProyectos';
 import Dashboard from './pages/Dashboard';
+import HistorialProyectos from './pages/HistorialProyectos';
 
 const enlaceEstilo = { color: 'white', textDecoration: 'none' };
 
@@ -32,8 +32,9 @@ const Navbar = () => {
 
       {usuario ? (
         <>
-          <Link to="/subir" style={enlaceEstilo}>Subir Proyecto</Link>
-            <Link to="/proyectos" style={enlaceEstilo}>Mirar Proyectos</Link>
+          <Link to="/subir" style={enlaceEstilo}>Subir Proyectos</Link>
+          <Link to="/proyectos" style={{ color: 'white', textDecoration: 'none' }}>Mirar Proyectos</Link>
+
           <Link to="/dashboard" style={enlaceEstilo}>Dashboard</Link>
           <span style={{ color: '#cfe0f5', fontSize: '0.9rem' }}>{usuario.nombre}</span>
           <button
@@ -65,7 +66,9 @@ const App = () => {
               {/* Públicas */}
               <Route path="/login" element={<Login />} />
               <Route path="/registrarse" element={<Registrarse />} />
-
+              
+              <Route path="/proyectos" element={<RutaProtegida><HistorialProyectos /></RutaProtegida>}/>
+              <Route path="/dashboard/:id" element={<RutaProtegida><Dashboard /></RutaProtegida>}/>
               {/* Protegidas: exigen sesión iniciada */}
               <Route path="/subir" element={<RutaProtegida><SubirProyecto /></RutaProtegida>} />
               <Route path="/dashboard" element={<RutaProtegida><Dashboard /></RutaProtegida>} />
@@ -73,24 +76,7 @@ const App = () => {
               {/* El punto de entrada envía a /subir (y de ahí a /login si no hay sesión) */}
               <Route path="/" element={<Navigate to="/subir" replace />} />
               <Route path="*" element={<Navigate to="/" replace />} />
-            
-            <Route
-              path="/proyectos"
-              element={
-                <RutaProtegida>
-                  <HistorialProyectos />
-                </RutaProtegida>
-              }
-            />
-            <Route
-              path="/dashboard/:id"
-              element={
-                <RutaProtegida>
-                  <Dashboard />
-                </RutaProtegida>
-              }
-            />
-          </Routes>
+            </Routes>
           </main>
         </div>
       </Router>
