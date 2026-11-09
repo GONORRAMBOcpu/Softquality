@@ -460,7 +460,29 @@ async def ejecutar_analisis_zip(
 
         try:
             with zipfile.ZipFile(zip_path, "r") as zip_ref:
-                zip_ref.extractall(extract_dir)
+                MAX_PESO_DESCOMPRIMIDO = 50 * 1024 * 1024  # 50 MB límite seguro
+                MAX_ARCHIVOS = 1000                        # Tope de archivos permitidos
+                peso_total = 0
+                conteo_archivos = 0
+
+                for zip_info in zip_ref.infolist():
+                    # 1. Blindaje anti Path Traversal (evita que extraigan fuera del directorio temporal)
+                    if ".." in zip_info.filename or zip_info.filename.startswith(("/", "\\")):
+                        raise HTTPException(status_code=400, detail=f"Ruta maliciosa detectada en el ZIP: {zip_info.filename}")
+                    
+                    # 2. Protección contra saturación de inodos (millones de archivos)
+                    conteo_archivos += 1
+                    if conteo_archivos > MAX_ARCHIVOS:
+                        raise HTTPException(status_code=400, detail="El proyecto contiene demasiados archivos (Máx: 1000).")
+                    
+                    # 3. Protección anti-Zip Bomb (peso descomprimido)
+                    peso_total += zip_info.file_size
+                    if peso_total > MAX_PESO_DESCOMPRIMIDO:
+                        raise HTTPException(status_code=400, detail="El proyecto supera el límite seguro de 50MB al descomprimir (Alerta: Posible Zip Bomb).")
+                    
+                    # Extraer el archivo de forma segura uno a uno
+                    zip_ref.extract(zip_info, extract_dir)
+
         except zipfile.BadZipFile:
             raise HTTPException(status_code=400, detail="El archivo zip está corrupto")
 
@@ -652,6 +674,7 @@ def obtener_resultados_dashboard(id_analisis: int, db: Session = Depends(get_db)
                 .all()
             )
             punto_grafica = _construir_punto_grafica_iso(ver.numero_version, resultados_ver)
+            punto_grafica["id_analisis"] = anal_ver.id_analisis # <--- AGREGA ESTA LÍNEA
             metricas_historicas.append(punto_grafica)
     else:
         resultados_db = (
@@ -664,6 +687,7 @@ def obtener_resultados_dashboard(id_analisis: int, db: Session = Depends(get_db)
             .all()
         )
         punto_grafica = _construir_punto_grafica_iso(numero_version, resultados_db)
+        punto_grafica["id_analisis"] = id_analisis # <--- AGREGA ESTA LÍNEA
         metricas_historicas.append(punto_grafica)
 
     evaluacion_cmmi = (

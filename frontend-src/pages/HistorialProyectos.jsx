@@ -8,15 +8,20 @@ import {
 } from '../services/api';
 
 const HistorialProyectos = () => {
+  // === 1. ESTADOS ORIGINALES MANTENIDOS ===
   const [proyectos, setProyectos] = useState([]);
   const [proyectoAbiertoId, setProyectoAbiertoId] = useState(null);
   const [editandoId, setEditandoId] = useState(null);
   const [nuevoNombre, setNuevoNombre] = useState('');
   const [cargando, setCargando] = useState(true);
   const [mensaje, setMensaje] = useState('');
+  
+  // Nuevo estado para la barra de búsqueda del nuevo diseño
+  const [busqueda, setBusqueda] = useState('');
 
   const navigate = useNavigate();
 
+  // === 2. LÓGICA ORIGINAL MANTENIDA ===
   const cargarProyectos = async () => {
     setCargando(true);
     try {
@@ -42,7 +47,6 @@ const HistorialProyectos = () => {
     setTimeout(() => setMensaje(''), 3500);
   };
 
-  // Editar el nombre de un proyecto
   const iniciarEdicion = (proy, e) => {
     if (e) e.stopPropagation();
     setEditandoId(proy.id_proyecto);
@@ -64,7 +68,6 @@ const HistorialProyectos = () => {
     }
   };
 
-  // Eliminar un proyecto completo con todas sus versiones
   const manejarEliminarProyecto = async (proy, e) => {
     if (e) e.stopPropagation();
     const confirmar = window.confirm(
@@ -84,7 +87,6 @@ const HistorialProyectos = () => {
     }
   };
 
-  // Abrir una versión específica en el Dashboard
   const verVersionEnDashboard = (idAnalisis, idProyecto) => {
     localStorage.setItem('ultimoIdAnalisis', idAnalisis);
     if (idProyecto) {
@@ -93,14 +95,14 @@ const HistorialProyectos = () => {
     navigate(`/dashboard/${idAnalisis}`);
   };
 
-  // Ir a subir una nueva versión para este proyecto específico
   const irASubirNuevaVersion = (idProyecto, e) => {
     if (e) e.stopPropagation();
-    localStorage.setItem('ultimoIdProyecto', idProyecto);
+    if (idProyecto) {
+      localStorage.setItem('ultimoIdProyecto', idProyecto);
+    }
     navigate('/subir');
   };
 
-  // Eliminar una versión individual dentro de un proyecto
   const manejarEliminarVersion = async (ver) => {
     const confirmar = window.confirm(
       `¿Estás seguro de que deseas eliminar la "${ver.etiqueta_completa}"? Esta acción no se puede deshacer.`
@@ -116,255 +118,358 @@ const HistorialProyectos = () => {
     }
   };
 
+  // Filtrar proyectos según la barra de búsqueda para la vista principal
+  const proyectosFiltrados = proyectos.filter(p => 
+    p.nombre.toLowerCase().includes(busqueda.toLowerCase())
+  );
+
+  // === 3. INTERFAZ GRÁFICA (IDENTIDAD VISUAL DARK THEME) ===
   return (
-    <div style={{ padding: '2rem', maxWidth: '1100px', margin: '0 auto', fontFamily: 'sans-serif' }}>
-      {/* ENCABEZADO DINÁMICO */}
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #eee', paddingBottom: '1rem', marginBottom: '1.5rem' }}>
+    <div style={{ backgroundColor: '#0f172a', minHeight: '100vh', color: '#f8fafc', padding: '2.5rem', fontFamily: 'Inter, sans-serif' }}>
+      
+      {/* --- ENCABEZADO SUPERIOR --- */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem' }}>
         <div>
-          <h1 style={{ margin: 0, color: '#004080' }}>
-            {proyectoSeleccionado
-              ? `📂 Proyecto: ${proyectoSeleccionado.nombre}`
-              : '📂 Mirar Proyectos'}
+          <p style={{ color: '#06b6d4', fontSize: '0.75rem', letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: '0.6rem', fontWeight: '600' }}>
+            ESPACIO DE TRABAJO / BIBLIOTECA
+          </p>
+          <h1 style={{ margin: '0 0 0.5rem 0', fontSize: '2.4rem', fontWeight: 'bold', color: '#f8fafc' }}>
+            {proyectoSeleccionado ? `Versiones de ${proyectoSeleccionado.nombre}` : 'Mirar proyectos'}
           </h1>
-          <p style={{ margin: '5px 0 0 0', color: '#666' }}>
-            {proyectoSeleccionado
-              ? `Explora las versiones analizadas de "${proyectoSeleccionado.nombre}", visualízalas en el Dashboard o elimina registros.`
-              : 'Selecciona un proyecto para ver todas sus versiones analizadas, edita su nombre o administra tus entregas.'}
+          <p style={{ margin: 0, color: '#94a3b8', fontSize: '1rem' }}>
+            {proyectoSeleccionado 
+              ? 'Administra las entregas, abre los reportes en el Dashboard o elimina versiones antiguas.'
+              : 'Consulta las versiones analizadas, edita los nombres y administra tus entregas.'}
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', gap: '1rem' }}>
           {proyectoSeleccionado && (
             <button
               onClick={() => setProyectoAbiertoId(null)}
               style={{
-                backgroundColor: '#475569', color: '#fff', border: 'none', padding: '10px 16px',
-                borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold'
+                backgroundColor: 'transparent', color: '#cbd5e1', border: '1px solid #334155', padding: '0.8rem 1.5rem',
+                borderRadius: '6px', cursor: 'pointer', fontWeight: '500', transition: 'background 0.2s'
               }}
+              onMouseOver={(e) => e.target.style.backgroundColor = '#1e293b'}
+              onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
             >
               ⬅ Volver a Proyectos
             </button>
           )}
 
           <button
-            onClick={() =>
-              proyectoSeleccionado
-                ? irASubirNuevaVersion(proyectoSeleccionado.id_proyecto)
-                : navigate('/subir')
-            }
+            onClick={(e) => proyectoSeleccionado ? irASubirNuevaVersion(proyectoSeleccionado.id_proyecto, e) : irASubirNuevaVersion(null, e)}
             style={{
-              backgroundColor: '#0056b3', color: '#fff', border: 'none', padding: '10px 18px',
-              borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold'
+              backgroundColor: '#8b5cf6', color: 'white', border: 'none', padding: '0.8rem 1.5rem',
+              borderRadius: '6px', cursor: 'pointer', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '8px',
+              boxShadow: '0 4px 14px 0 rgba(139, 92, 246, 0.39)', transition: 'background 0.2s'
             }}
+            onMouseOver={(e) => e.target.style.backgroundColor = '#7c3aed'}
+            onMouseOut={(e) => e.target.style.backgroundColor = '#8b5cf6'}
           >
-            {proyectoSeleccionado
-              ? `+ Subir ${proyectoSeleccionado.proxima_version} a ${proyectoSeleccionado.nombre}`
-              : '+ Subir Proyecto / Nueva Versión'}
+            <span style={{ fontSize: '1.2rem', lineHeight: 1 }}>+</span> 
+            {proyectoSeleccionado ? 'Subir nueva versión' : 'Subir proyecto / Nueva versión'}
           </button>
         </div>
-      </header>
+      </div>
 
+      {/* --- ALERTAS TEMPORALES --- */}
       {mensaje && (
-        <div style={{ backgroundColor: '#e6f4ea', color: '#1e7e34', padding: '12px 16px', borderRadius: '6px', marginBottom: '1.5rem', fontWeight: 'bold' }}>
+        <div style={{ backgroundColor: '#064e3b', color: '#34d399', padding: '12px 16px', borderRadius: '6px', marginBottom: '1.5rem', fontWeight: '500', border: '1px solid #059669' }}>
           {mensaje}
         </div>
       )}
 
+      {/* --- BANNER DE ESTADÍSTICAS --- */}
+      {!proyectoSeleccionado && (
+        <div style={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px', padding: '1.5rem 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+            <span style={{ fontSize: '3rem', fontWeight: '300', color: '#f8fafc', lineHeight: 1 }}>
+              {proyectos.length.toString().padStart(2, '0')}
+            </span>
+            <div style={{ borderLeft: '1px solid #334155', paddingLeft: '1.5rem' }}>
+              <div style={{ fontWeight: '600', fontSize: '1rem', color: '#f8fafc', marginBottom: '4px' }}>Proyectos en tu espacio</div>
+              <div style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Todas tus entregas, organizadas.</div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#06b6d4', fontSize: '0.85rem' }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M6 9v3a3 3 0 0 0 3 3h6v-3"/></svg>
+              <span style={{ color: '#94a3b8' }}>Cada proyecto conserva su propio historial de versiones y análisis.</span>
+            </div>
+            <button style={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#06b6d4', padding: '0.5rem 1rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: '500', marginLeft: '1rem' }}>
+              Vista de proyectos
+            </button>
+          </div>
+        </div>
+      )}
+
+{/* =========================================================
+          CONTENIDO DINÁMICO: PROYECTOS (Nivel 1) O VERSIONES (Nivel 2)
+          ========================================================= */}
+      
       {cargando ? (
-        <p style={{ textAlign: 'center', marginTop: '3rem', color: '#555' }}>
-          Cargando proyectos y versiones desde PostgreSQL...
+        <p style={{ textAlign: 'center', marginTop: '3rem', color: '#94a3b8' }}>
+          Cargando datos desde PostgreSQL...
         </p>
       ) : proyectos.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '3rem', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
-          <h3 style={{ color: '#555' }}>No hay proyectos registrados todavía</h3>
-          <p style={{ color: '#777' }}>Ve a la pestaña "Subir Proyecto" para crear tu primer proyecto y analizar su Versión 1.</p>
+        <div style={{ textAlign: 'center', padding: '3rem', backgroundColor: '#1e293b', borderRadius: '12px', border: '1px dashed #334155' }}>
+          <h3 style={{ color: '#f8fafc', fontWeight: '500' }}>No hay proyectos registrados todavía</h3>
+          <p style={{ color: '#94a3b8' }}>Ve a la opción "Subir Proyecto / Nueva versión" para crear tu primer proyecto y analizar su Versión 1.</p>
         </div>
       ) : !proyectoSeleccionado ? (
-        /* =========================================================
-           NIVEL 1: LISTA DE PROYECTOS (EJ. "PopaBus", "Pruebas Iniciales")
-           ========================================================= */
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))', gap: '1.25rem' }}>
-          {proyectos.map((proy) => (
-            <div
-              key={proy.id_proyecto}
-              onClick={() => setProyectoAbiertoId(proy.id_proyecto)}
-              style={{
-                backgroundColor: '#fff',
-                border: '1px solid #cbd5e1',
-                borderTop: '5px solid #004080',
-                borderRadius: '10px',
-                padding: '1.35rem',
-                cursor: 'pointer',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                gap: '1rem',
-                boxShadow: '0 2px 6px rgba(0,0,0,0.05)'
-              }}
-            >
-              <div>
-                {editandoId === proy.id_proyecto ? (
-                  <div
-                    onClick={(e) => e.stopPropagation()}
-                    style={{ display: 'flex', gap: '6px', marginBottom: '0.5rem' }}
-                  >
-                    <input
-                      type="text"
-                      value={nuevoNombre}
-                      onChange={(e) => setNuevoNombre(e.target.value)}
-                      style={{ flex: 1, padding: '6px 8px', borderRadius: '5px', border: '1px solid #004080' }}
-                    />
-                    <button
-                      onClick={(e) => guardarNombreProyecto(proy.id_proyecto, e)}
-                      style={{ backgroundColor: '#10b981', color: '#fff', border: 'none', padding: '6px 10px', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}
-                    >
-                      OK
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setEditandoId(null); }}
-                      style={{ backgroundColor: '#64748b', color: '#fff', border: 'none', padding: '6px 10px', borderRadius: '5px', cursor: 'pointer' }}
-                    >
-                      X
-                    </button>
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h3 style={{ margin: 0, color: '#004080', fontSize: '1.25rem' }}>
-                      📁 {proy.nombre}
-                    </h3>
-                    <span style={{ backgroundColor: '#dbeafe', color: '#1e40af', fontSize: '0.8rem', fontWeight: 'bold', padding: '4px 10px', borderRadius: '12px' }}>
-                      {proy.total_versiones} {proy.total_versiones === 1 ? 'Versión' : 'Versiones'}
-                    </span>
-                  </div>
-                )}
-
-                <p style={{ margin: '8px 0 0 0', fontSize: '0.88rem', color: '#64748b' }}>
-                  {proy.total_versiones > 0
-                    ? `Última entrega: ${proy.versiones[0].numero_version} (${proy.versiones[0].fecha})`
-                    : 'Sin versiones subidas todavía'}
-                </p>
-              </div>
-
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', paddingTop: '0.5rem', borderTop: '1px solid #f1f5f9' }}>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setProyectoAbiertoId(proy.id_proyecto);
-                  }}
-                  style={{
-                    flex: 1, backgroundColor: '#004080', color: '#fff', border: 'none',
-                    padding: '8px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem'
-                  }}
-                >
-                  🔍 Ver Versiones ({proy.total_versiones})
-                </button>
-
-                <button
-                  onClick={(e) => iniciarEdicion(proy, e)}
-                  style={{
-                    backgroundColor: '#f59e0b', color: '#fff', border: 'none',
-                    padding: '8px 10px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem'
-                  }}
-                  title="Editar nombre del proyecto"
-                >
-                  ✏️ Editar
-                </button>
-
-                <button
-                  onClick={(e) => manejarEliminarProyecto(proy, e)}
-                  style={{
-                    backgroundColor: '#dc2626', color: '#fff', border: 'none',
-                    padding: '8px 10px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem'
-                  }}
-                  title="Eliminar proyecto completo"
-                >
-                  🗑️
-                </button>
-              </div>
+        
+        /* --- NIVEL 1: VISTA DE TABLA DE PROYECTOS (Diseño Captura 1 y 2) --- */
+        <div style={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px', overflow: 'hidden' }}>
+          
+          {/* Barra de Búsqueda y Ordenamiento */}
+          <div style={{ padding: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #334155' }}>
+            <div style={{ position: 'relative', width: '40%' }}>
+              <svg style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input 
+                type="text" 
+                placeholder="Buscar por nombre de proyecto..." 
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #334155', color: '#f8fafc', padding: '0.6rem 1rem 0.6rem 2.5rem', borderRadius: '6px', fontSize: '0.9rem', outline: 'none' }}
+              />
             </div>
-          ))}
-        </div>
-      ) : (
-        /* =========================================================
-           NIVEL 2: VERSIONES DENTRO DEL PROYECTO SELECCIONADO
-           ========================================================= */
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {proyectoSeleccionado.versiones.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '2.5rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
-              <h3 style={{ color: '#475569', marginTop: 0 }}>
-                El proyecto "{proyectoSeleccionado.nombre}" aún no tiene versiones analizadas
-              </h3>
-              <button
-                onClick={() => irASubirNuevaVersion(proyectoSeleccionado.id_proyecto)}
-                style={{
-                  backgroundColor: '#0056b3', color: '#fff', border: 'none', padding: '10px 18px',
-                  borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold'
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', color: '#94a3b8', fontSize: '0.9rem' }}>
+              <span>Ordenar por</span>
+              <button style={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#f8fafc', padding: '0.6rem 1rem', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '0.7rem' }}>▼</span> Última entrega
+              </button>
+            </div>
+          </div>
+
+          {/* Encabezados de Tabla */}
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', padding: '1rem 1.5rem', color: '#64748b', fontSize: '0.75rem', letterSpacing: '1px', textTransform: 'uppercase', fontWeight: '600' }}>
+            <div>PROYECTO</div>
+            <div>VERSIONES</div>
+            <div>ÚLTIMA ENTREGA</div>
+            <div style={{ textAlign: 'right' }}>GESTIÓN</div>
+          </div>
+
+          {/* Lista de Filas de Proyectos */}
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {proyectosFiltrados.map((proy, index) => (
+              <div 
+                key={proy.id_proyecto}
+                style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: '2fr 1fr 1fr 1fr', 
+                  padding: '1.25rem 1.5rem', 
+                  alignItems: 'center', 
+                  borderTop: '1px solid #334155',
+                  backgroundColor: index % 2 === 0 ? 'transparent' : '#1e293b' 
                 }}
               >
-                Subir Versión 1 de {proyectoSeleccionado.nombre}
+                {/* Columna: Nombre del Proyecto e Icono */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div style={{ backgroundColor: '#334155', padding: '0.6rem', borderRadius: '8px', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                  </div>
+                  <div>
+                    {editandoId === proy.id_proyecto ? (
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <input
+                          type="text"
+                          value={nuevoNombre}
+                          onChange={(e) => setNuevoNombre(e.target.value)}
+                          style={{ backgroundColor: '#0f172a', color: '#f8fafc', border: '1px solid #8b5cf6', borderRadius: '4px', padding: '4px 8px', outline: 'none' }}
+                          autoFocus
+                        />
+                        <button onClick={(e) => guardarNombreProyecto(proy.id_proyecto, e)} style={{ backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer' }}>✓</button>
+                        <button onClick={(e) => { e.stopPropagation(); setEditandoId(null); }} style={{ backgroundColor: '#64748b', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer' }}>✗</button>
+                      </div>
+                    ) : (
+                      <>
+                        <h3 style={{ margin: '0 0 4px 0', fontSize: '1.1rem', color: '#f8fafc', fontWeight: '600' }}>
+                          {proy.nombre}
+                        </h3>
+                        <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>Proyecto Python</p>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Columna: Cantidad de versiones */}
+                <div>
+                  <span style={{ backgroundColor: '#2e1065', color: '#c4b5fd', padding: '4px 12px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: '500' }}>
+                    {proy.total_versiones} {proy.total_versiones === 1 ? 'versión' : 'versiones'}
+                  </span>
+                </div>
+
+                {/* Columna: Última entrega */}
+                <div style={{ color: '#cbd5e1', fontSize: '0.9rem' }}>
+                  {proy.total_versiones > 0 ? (
+                    <>
+                      <div style={{ marginBottom: '4px' }}>{proy.versiones[0].numero_version}</div>
+                      <div style={{ color: '#64748b', fontSize: '0.8rem', fontFamily: 'monospace' }}>
+                        {proy.versiones[0].fecha}
+                      </div>
+                    </>
+                  ) : (
+                    <span style={{ color: '#64748b' }}>Sin entregas</span>
+                  )}
+                </div>
+
+                {/* Columna: Botones de Gestión */}
+                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={() => setProyectoAbiertoId(proy.id_proyecto)}
+                    style={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#f8fafc', padding: '0.5rem 1rem', borderRadius: '6px', cursor: 'pointer', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem' }}
+                    onMouseOver={(e) => e.target.style.backgroundColor = '#1e293b'}
+                    onMouseOut={(e) => e.target.style.backgroundColor = '#0f172a'}
+                  >
+                    ↗ Ver versiones
+                  </button>
+
+                  <button
+                    onClick={(e) => iniciarEdicion(proy, e)}
+                    style={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#94a3b8', padding: '0.5rem', borderRadius: '6px', cursor: 'pointer' }}
+                    title="Editar nombre"
+                    onMouseOver={(e) => e.target.style.backgroundColor = '#1e293b'}
+                    onMouseOut={(e) => e.target.style.backgroundColor = '#0f172a'}
+                  >
+                    ✏️
+                  </button>
+
+                  <button
+                    onClick={(e) => manejarEliminarProyecto(proy, e)}
+                    style={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#f87171', padding: '0.5rem', borderRadius: '6px', cursor: 'pointer' }}
+                    title="Eliminar proyecto"
+                    onMouseOver={(e) => e.target.style.backgroundColor = '#450a0a'}
+                    onMouseOut={(e) => e.target.style.backgroundColor = '#0f172a'}
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Footer de la Tabla (Paginador / Resumen) */}
+          <div style={{ padding: '1.25rem 1.5rem', borderTop: '1px solid #334155', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#64748b', fontSize: '0.85rem' }}>
+            <div>Mostrando {proyectosFiltrados.length} de {proyectos.length} proyectos</div>
+            <div>Selecciona «Ver versiones» para explorar cada entrega.</div>
+          </div>
+        </div>
+      ) : (
+/* --- NIVEL 2: HISTORIAL DE VERSIONES DEL PROYECTO (Diseño Captura 2 y 3) --- */
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          
+          {/* Encabezado del Historial de Versiones */}
+          <div style={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px', padding: '1.5rem 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <div style={{ backgroundColor: '#334155', padding: '0.6rem', borderRadius: '8px', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              </div>
+              <div>
+                <h2 style={{ margin: '0 0 4px 0', fontSize: '1.3rem', color: '#f8fafc', fontWeight: '600' }}>
+                  {proyectoSeleccionado.nombre}
+                </h2>
+                <p style={{ margin: 0, fontSize: '0.85rem', color: '#94a3b8' }}>
+                  Total de entregas analizadas: {proyectoSeleccionado.versiones.length}
+                </p>
+              </div>
+            </div>
+            
+            <button
+              onClick={() => irASubirNuevaVersion(proyectoSeleccionado.id_proyecto)}
+              style={{ backgroundColor: '#1e293b', border: '1px solid #475569', color: '#f8fafc', padding: '0.6rem 1.2rem', borderRadius: '6px', cursor: 'pointer', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '6px' }}
+              onMouseOver={(e) => e.target.style.backgroundColor = '#334155'}
+              onMouseOut={(e) => e.target.style.backgroundColor = '#1e293b'}
+            >
+              <span style={{ fontSize: '1.1rem' }}>+</span> Subir nueva versión
+            </button>
+          </div>
+
+          {/* Tarjetas de Versiones */}
+          {proyectoSeleccionado.versiones.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '3rem', backgroundColor: '#1e293b', borderRadius: '12px', border: '1px dashed #334155' }}>
+              <h3 style={{ color: '#f8fafc', fontWeight: '500' }}>
+                El proyecto "{proyectoSeleccionado.nombre}" aún no tiene versiones analizadas
+              </h3>
+              <p style={{ color: '#94a3b8', marginBottom: '1.5rem' }}>Abre el módulo de subida para enviar tu primera entrega en formato .zip.</p>
+              <button
+                onClick={() => irASubirNuevaVersion(proyectoSeleccionado.id_proyecto)}
+                style={{ backgroundColor: '#8b5cf6', color: 'white', border: 'none', padding: '0.8rem 1.5rem', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}
+              >
+                Subir Versión 1
               </button>
             </div>
           ) : (
-            proyectoSeleccionado.versiones.map((ver) => (
-              <div
-                key={ver.id_analisis}
-                style={{
-                  backgroundColor: '#fff',
-                  border: '1px solid #e2e8f0',
-                  borderLeft: '5px solid #004080',
-                  borderRadius: '8px',
-                  padding: '1.25rem',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  boxShadow: '0 2px 5px rgba(0,0,0,0.05)'
-                }}
-              >
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span style={{ fontSize: '1.15rem', fontWeight: 'bold', color: '#004080' }}>
-                      {ver.etiqueta_completa}
-                    </span>
-                    <span style={{ backgroundColor: '#dbeafe', color: '#1e40af', fontSize: '0.78rem', fontWeight: 'bold', padding: '3px 10px', borderRadius: '12px' }}>
-                      {ver.fecha}
-                    </span>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
+              {proyectoSeleccionado.versiones.map((ver) => (
+                <div
+                  key={ver.id_analisis}
+                  style={{
+                    backgroundColor: '#1e293b',
+                    border: '1px solid #334155',
+                    borderLeft: '4px solid #8b5cf6',
+                    borderRadius: '8px',
+                    padding: '1.25rem 1.5rem',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                  }}
+                >
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <span style={{ fontSize: '1.1rem', fontWeight: '600', color: '#f8fafc' }}>
+                        {ver.etiqueta_completa}
+                      </span>
+                      <span style={{ backgroundColor: '#0f172a', color: '#cbd5e1', border: '1px solid #334155', fontSize: '0.75rem', fontWeight: '500', padding: '4px 10px', borderRadius: '12px' }}>
+                        {ver.fecha}
+                      </span>
+                    </div>
+
+                    <div style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '4px' }}>
+                      <strong>📊 ISO 25010:</strong> <span style={{ color: '#cbd5e1' }}>{ver.resumen_metricas}</span>
+                    </div>
+
+                    <div style={{ fontSize: '0.85rem', color: '#94a3b8' }}>
+                      <strong>🏆 CMMI:</strong> <span style={{ color: '#34d399' }}>{ver.nivel_cmmi}</span>
+                    </div>
                   </div>
 
-                  <div style={{ fontSize: '0.9rem', color: '#334155' }}>
-                    <strong>📊 Métricas ISO/IEC 25010:</strong> {ver.resumen_metricas}
-                  </div>
+                  <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <button
+                      onClick={() => verVersionEnDashboard(ver.id_analisis, proyectoSeleccionado.id_proyecto)}
+                      style={{
+                        backgroundColor: '#8b5cf6', color: 'white', border: 'none',
+                        padding: '0.6rem 1.2rem', borderRadius: '6px', cursor: 'pointer', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', boxShadow: '0 2px 8px rgba(139, 92, 246, 0.3)'
+                      }}
+                      onMouseOver={(e) => e.target.style.backgroundColor = '#7c3aed'}
+                      onMouseOut={(e) => e.target.style.backgroundColor = '#8b5cf6'}
+                    >
+                      ↗ Ver en Dashboard
+                    </button>
 
-                  <div style={{ fontSize: '0.88rem', color: '#047857' }}>
-                    <strong>🏆 Madurez CMMI:</strong> {ver.nivel_cmmi}
+                    <button
+                      onClick={() => manejarEliminarVersion(ver)}
+                      style={{
+                        backgroundColor: '#0f172a', color: '#f87171', border: '1px solid #334155',
+                        padding: '0.6rem 1rem', borderRadius: '6px', cursor: 'pointer', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem'
+                      }}
+                      title="Eliminar Versión"
+                      onMouseOver={(e) => e.target.style.backgroundColor = '#450a0a'}
+                      onMouseOut={(e) => e.target.style.backgroundColor = '#0f172a'}
+                    >
+                      🗑️ Eliminar
+                    </button>
                   </div>
                 </div>
-
-                <div style={{ display: 'flex', gap: '0.75rem' }}>
-                  <button
-                    onClick={() => verVersionEnDashboard(ver.id_analisis, proyectoSeleccionado.id_proyecto)}
-                    style={{
-                      backgroundColor: '#004080', color: '#fff', border: 'none',
-                      padding: '9px 15px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold'
-                    }}
-                  >
-                    📊 Ver en Dashboard
-                  </button>
-
-                  <button
-                    onClick={() => manejarEliminarVersion(ver)}
-                    style={{
-                      backgroundColor: '#dc2626', color: '#fff', border: 'none',
-                      padding: '9px 15px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold'
-                    }}
-                  >
-                    🗑️ Eliminar Versión
-                  </button>
-                </div>
-              </div>
-            ))
+              ))}
+            </div>
           )}
         </div>
       )}
+
     </div>
   );
 };

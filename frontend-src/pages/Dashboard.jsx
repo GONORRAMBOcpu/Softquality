@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { 
   CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, XAxis, YAxis 
 } from 'recharts';
@@ -7,43 +7,41 @@ import {
 import { obtenerResultadosDashboard } from '../services/api';
 import FormularioCMMI from '../components/FormularioCMMI';
 
-// Configuración visual de las 4 características ISO/IEC 25010 alineada con los colores de Recharts
+// Configuración visual adaptada al nuevo Dark Theme (colores neón)
 const CONFIG_CARACTERISTICAS_ISO = [
   {
     key: 'Mantenibilidad',
-    icono: '🛠️',
-    colorBorde: '#8884d8',
-    colorFondoBadge: '#ede9fe',
-    colorTextoBadge: '#5b21b6',
+    icono: '🔧',
+    colorBorde: '#8b5cf6', // Morado
+    colorFondoBadge: '#2e1065',
+    colorTextoBadge: '#c4b5fd',
   },
   {
     key: 'Seguridad',
     icono: '🛡️',
-    colorBorde: '#10b981',
-    colorFondoBadge: '#d1fae5',
-    colorTextoBadge: '#065f46',
+    colorBorde: '#06b6d4', // Cyan
+    colorFondoBadge: '#164e63',
+    colorTextoBadge: '#67e8f9',
   },
   {
     key: 'Flexibilidad',
     icono: '🧩',
-    colorBorde: '#f59e0b',
-    colorFondoBadge: '#fef3c7',
-    colorTextoBadge: '#92400e',
+    colorBorde: '#fbbf24', // Amarillo
+    colorFondoBadge: '#78350f',
+    colorTextoBadge: '#fde68a',
   },
   {
     key: 'Fiabilidad',
     icono: '✅',
-    colorBorde: '#ff7300',
-    colorFondoBadge: '#ffedd5',
-    colorTextoBadge: '#9a3412',
+    colorBorde: '#34d399', // Verde menta
+    colorFondoBadge: '#064e3b',
+    colorTextoBadge: '#6ee7b7',
   },
 ];
 
 const Dashboard = () => {
-  // 1. Extraemos el ID si viene en la URL (/dashboard/:id)
   const { id } = useParams();
-
-  // 2. Resolvemos dinámicamente el ID: URL -> localStorage -> 1 (respaldo)
+  const navigate = useNavigate();
   const idAnalisisActual = Number(id || localStorage.getItem('ultimoIdAnalisis') || 1);
 
   const [datosEvolucion, setDatosEvolucion] = useState([]);
@@ -53,29 +51,46 @@ const Dashboard = () => {
   const [analisisISO, setAnalisisISO] = useState("Cargando diagnóstico técnico ISO/IEC 25010...");
   const [analisisCMMI, setAnalisisCMMI] = useState(null);
   const [cargando, setCargando] = useState(true);
+  
+  // Estado para controlar el menú desplegable de versiones
+  const [menuVersionesAbierto, setMenuVersionesAbierto] = useState(false);
 
-  // Estados para controlar el Modal y el Nivel de Madurez CMMI
+  // Estados del CMMI
   const [mostrarModalCMMI, setMostrarModalCMMI] = useState(false);
   const [nivelMadurez, setNivelMadurez] = useState("Pendiente de evaluación");
 
-  // Función que separa limpiamente la parte ISO 25010 de la parte CMMI
+  const calcularVariacion = (nombreMetrica, valorActual) => {
+    if (!datosEvolucion || datosEvolucion.length < 2 || valorActual === null) return null;
+    let indiceActual = datosEvolucion.findIndex(d => d.version === numeroVersionActual);
+    if (indiceActual === -1) indiceActual = datosEvolucion.length - 1; 
+    if (indiceActual <= 0) return null;
+
+    const valorAnterior = datosEvolucion[indiceActual - 1][nombreMetrica];
+    if (valorAnterior === undefined || valorAnterior === null) return null;
+
+    const diferencia = Number(valorActual) - Number(valorAnterior);
+
+    if (diferencia > 0) {
+      return <span style={{ color: '#34d399', marginLeft: '6px' }}>▲ +{diferencia.toFixed(1)}</span>;
+    } else if (diferencia < 0) {
+      return <span style={{ color: '#f87171', marginLeft: '6px' }}>▼ {diferencia.toFixed(1)}</span>;
+    } else {
+      return <span style={{ color: '#94a3b8', marginLeft: '6px' }}>➖</span>;
+    }
+  };
+
   const procesarRecomendacionesIA = (iaData) => {
     if (!iaData) {
       setAnalisisISO("No hay recomendaciones generadas por la IA para este análisis.");
       setAnalisisCMMI(null);
       return;
     }
-
     if (typeof iaData === 'object' && (iaData.analisis_iso || iaData.analisis_cmmi)) {
       setAnalisisISO(iaData.analisis_iso || "Sin observaciones técnicas registradas.");
       setAnalisisCMMI(iaData.analisis_cmmi || null);
       return;
     }
-
-    const textoCompleto = typeof iaData === 'string' 
-      ? iaData 
-      : (iaData.mensaje_general || JSON.stringify(iaData));
-
+    const textoCompleto = typeof iaData === 'string' ? iaData : (iaData.mensaje_general || JSON.stringify(iaData));
     if (textoCompleto.includes("Diagnóstico de Procesos (CMMI")) {
       const partes = textoCompleto.split("Diagnóstico de Procesos (CMMI");
       setAnalisisISO(partes[0].replace("Auditoría Técnica (ISO/IEC 25010):", "").trim());
@@ -87,133 +102,86 @@ const Dashboard = () => {
   };
 
   useEffect(() => {
-    if (id) {
-      localStorage.setItem('ultimoIdAnalisis', id);
-    }
-
+    if (id) localStorage.setItem('ultimoIdAnalisis', id);
     const cargarDatosReales = async () => {
       setCargando(true);
       try {
         const datosBackend = await obtenerResultadosDashboard(idAnalisisActual);
-        
         setDatosEvolucion(datosBackend.metricas_historicas || []);
         setEtiquetaVista(datosBackend.etiqueta_vista || `Análisis #${idAnalisisActual}`);
         setNombreProyecto(datosBackend.nombre_proyecto || '');
         setNumeroVersionActual(datosBackend.numero_version || '');
         procesarRecomendacionesIA(datosBackend.recomendaciones_ia);
-
-        if (datosBackend.nivel_cmmi) {
-          setNivelMadurez(datosBackend.nivel_cmmi);
-        } else {
-          setNivelMadurez("Pendiente de evaluación");
-        }
+        setNivelMadurez(datosBackend.nivel_cmmi || "Pendiente de evaluación");
       } catch (error) {
-        console.error("No se pudo conectar con la base de datos", error);
-        setAnalisisISO("Error de conexión. Verifica que el backend de FastAPI esté encendido.");
+        console.error("No se pudo conectar", error);
+        setAnalisisISO("Error de conexión. Verifica que el backend esté encendido.");
         setAnalisisCMMI(null);
       } finally {
         setCargando(false);
       }
     };
-
     cargarDatosReales();
   }, [id, idAnalisisActual]);
 
-  // Extrae y organiza las 4 características ISO/IEC 25010 + la recomendación final
-  const desglosarAnalisisISO = () => {
-    const puntoVersion =
-      datosEvolucion.find((item) => item.version === numeroVersionActual) ||
-      datosEvolucion[datosEvolucion.length - 1] ||
-      {};
+  useEffect(() => {
+    const handleClickOutside = () => setMenuVersionesAbierto(false);
+    if (menuVersionesAbierto) {
+      window.addEventListener('click', handleClickOutside);
+    }
+    return () => window.removeEventListener('click', handleClickOutside);
+  }, [menuVersionesAbierto]);
 
+  const desglosarAnalisisISO = () => {
+    const puntoVersion = datosEvolucion.find((item) => item.version === numeroVersionActual) || datosEvolucion[datosEvolucion.length - 1] || {};
     let textoOriginal = String(analisisISO || '').trim();
+    
+    const mapaDetalles = {};
+    const ordenNombres = ['Mantenibilidad', 'Seguridad', 'Flexibilidad', 'Fiabilidad'];
+    let indices = [];
     let recomendacionGeneral = '';
 
-    // 1. Separar la recomendación final si viene después del bloque de métricas
-    const marcadoresRecomendacion = [
-      'Para elevar los puntajes hacia 100/100',
-      'Las 4 características evaluadas presentan',
-      'Para consolidar la Fiabilidad y Seguridad',
-    ];
-
-    for (const marcador of marcadoresRecomendacion) {
-      const idx = textoOriginal.indexOf(marcador);
-      if (idx !== -1) {
-        recomendacionGeneral = textoOriginal.slice(idx).trim();
-        textoOriginal = textoOriginal.slice(0, idx).trim();
-        break;
+    ordenNombres.forEach(nombre => {
+      const regex = new RegExp(`(?:-|\\*)?\\s*\\*\\*?${nombre}(?:\\s*\\([\\d\\.]+\\/100\\))?\\*\\*?\\s*:?`, 'i');
+      const match = textoOriginal.match(regex);
+      if (match) {
+        indices.push({ nombre, index: match.index, length: match[0].length });
       }
-    }
+    });
 
-    // Limpiar prefijo general y punto final del bloque de métricas
-    let bloqueMetricas = textoOriginal
-      .replace(/^Diagnóstico técnico ISO\/IEC 25010 \(escala 0 a 100\):\s*/i, '')
-      .replace(/\.\s*$/, '')
-      .trim();
+    if (indices.length > 0) {
+      indices.sort((a, b) => a.index - b.index);
+      let intro = textoOriginal.substring(0, indices[0].index).trim();
+      let conclusion = "";
 
-    // 2. Extraer el detalle individual de cada una de las 4 características
-    const ordenNombres = ['Mantenibilidad', 'Seguridad', 'Flexibilidad', 'Fiabilidad'];
-    const posiciones = ordenNombres
-      .map((nombre) => ({
-        nombre,
-        index: bloqueMetricas.indexOf(`${nombre}:`),
-      }))
-      .filter((item) => item.index !== -1)
-      .sort((a, b) => a.index - b.index);
+      for (let i = 0; i < indices.length; i++) {
+        const actual = indices[i];
+        const inicio = actual.index + actual.length;
+        const fin = (i + 1 < indices.length) ? indices[i + 1].index : textoOriginal.length;
+        
+        let fragmento = textoOriginal.substring(inicio, fin).trim().replace(/\s*-\s*$/, '').trim();
 
-    const mapaDetalles = {};
-
-    if (posiciones.length > 0) {
-      for (let i = 0; i < posiciones.length; i++) {
-        const actual = posiciones[i];
-        const siguiente = posiciones[i + 1];
-        const inicio = actual.index + actual.nombre.length + 1;
-        const fin = siguiente ? siguiente.index : bloqueMetricas.length;
-
-        let fragmento = bloqueMetricas
-          .slice(inicio, fin)
-          .trim()
-          .replace(/^\|\s*/, '')
-          .replace(/\s*\|\s*$/, '')
-          .trim();
-
-        // Extraer puntaje (ej. 96.87/100) y limpiar paréntesis externos de la evidencia
-        let puntajeExtraido = puntoVersion[actual.nombre];
-        const matchPuntaje = fragmento.match(/^(\d+(?:\.\d+)?)\s*\/\s*100\s*(.*)$/);
-        if (matchPuntaje) {
-          if (puntajeExtraido === undefined) {
-            puntajeExtraido = Number(matchPuntaje[1]);
-          }
-          fragmento = matchPuntaje[2].trim();
+        if (i === indices.length - 1) {
+           const separar = fragmento.split(/(?=\n\n|\r\n\r\n|Si corriges estas líneas|Te sugiero|Para preparar|En resumen)/i);
+           if (separar.length > 1) {
+               fragmento = separar[0].trim();
+               conclusion = separar.slice(1).join(" ").trim();
+           }
         }
-
-        if (fragmento.startsWith('(') && fragmento.endsWith(')')) {
-          fragmento = fragmento.slice(1, -1).trim();
-        }
-
-        mapaDetalles[actual.nombre] = {
-          puntaje: puntajeExtraido,
-          evidencia: fragmento || 'Métrica evaluada por análisis estático.',
-        };
+        mapaDetalles[actual.nombre] = { evidencia: fragmento };
       }
-    } else if (!recomendacionGeneral) {
-      // Si Gemini redactó un párrafo libre, lo mostramos en el bloque de síntesis y usamos los puntajes de la gráfica
-      recomendacionGeneral = analisisISO;
+      recomendacionGeneral = [intro, conclusion].filter(Boolean).join("\n\n");
+    } else {
+      recomendacionGeneral = textoOriginal;
     }
 
     const tarjetas = CONFIG_CARACTERISTICAS_ISO.map((cfg) => {
       const info = mapaDetalles[cfg.key] || {};
-      const valorNumerico =
-        info.puntaje !== undefined
-          ? Number(info.puntaje)
-          : puntoVersion[cfg.key] !== undefined
-          ? Number(puntoVersion[cfg.key])
-          : null;
-
-      return {
-        ...cfg,
-        puntaje: valorNumerico !== null && !Number.isNaN(valorNumerico) ? valorNumerico : null,
-        evidencia: info.evidencia || 'Evaluado en escala de 0 a 100 por el motor estático.',
+      const valorNumerico = puntoVersion[cfg.key] !== undefined ? Number(puntoVersion[cfg.key]) : null;
+      return { 
+        ...cfg, 
+        puntaje: valorNumerico !== null && !Number.isNaN(valorNumerico) ? valorNumerico : null, 
+        evidencia: info.evidencia || 'Métrica evaluada en escala de 0 a 100.' 
       };
     });
 
@@ -222,207 +190,307 @@ const Dashboard = () => {
 
   const { tarjetas: tarjetasISO, recomendacionGeneral } = desglosarAnalisisISO();
 
-  // Construcción limpia de la gráfica Recharts sin errores de atributos
-  const renderGraficaEvolucion = () => {
-    return React.createElement(
-      ResponsiveContainer,
-      { width: '100%', height: '100%' },
-      React.createElement(
-        LineChart,
-        { data: datosEvolucion, margin: { top: 20, right: 30, left: 0, bottom: 0 } },
-        React.createElement(CartesianGrid, { strokeDasharray: '3 3' }),
-        React.createElement(XAxis, { dataKey: 'version' }),
-        React.createElement(YAxis, { domain: [0, 100] }),
-        React.createElement(Tooltip, null),
-        React.createElement(Legend, null),
-        React.createElement(Line, { type: 'monotone', dataKey: 'Mantenibilidad', stroke: '#8884d8', strokeWidth: 3 }),
-        React.createElement(Line, { type: 'monotone', dataKey: 'Seguridad', stroke: '#82ca9d', strokeWidth: 3 }),
-        React.createElement(Line, { type: 'monotone', dataKey: 'Flexibilidad', stroke: '#ffc658', strokeWidth: 3 }),
-        React.createElement(Line, { type: 'monotone', dataKey: 'Fiabilidad', stroke: '#ff7300', strokeWidth: 3 })
-      )
-    );
+  const cambiarVersion = (versionSeleccionada) => {
+    // Intentamos extraer el ID si viene en algún formato, o usamos un fallback.
+    // Lo ideal es que tu backend (analisis.py) agregue "id_analisis": item.id_analisis
+    // dentro de los diccionarios que envía en metricas_historicas.
+    const idDestino = versionSeleccionada.id_analisis || versionSeleccionada.id; 
+    
+    if (idDestino) {
+      navigate(`/dashboard/${idDestino}`);
+      setMenuVersionesAbierto(false); // Cerramos el menú
+    } else {
+      // Si el backend definitivamente no envía el ID, mantenemos la advertencia
+      // pero te sugiero ir a analisis.py y asegurarte de que lo envíe.
+      alert('Para que este menú funcione, debes asegurarte de que tu backend envíe el campo "id_analisis" junto con el nombre de la versión.');
+    }
   };
+  const estilosImpresion = `
+    @media print {
+      body { background-color: white !important; }
+      nav, .no-print { display: none !important; }
+      .dashboard-container { box-shadow: none !important; margin: 0 !important; padding: 0 !important; background-color: white !important; }
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color: black !important; }
+    }
+  `;
 
   return (
-    <div style={{ padding: '2rem', fontFamily: 'sans-serif', maxWidth: '1250px', margin: '0 auto' }}>
-      
-      {/* Encabezado con indicador de la Versión y el Proyecto activo */}
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #eee', paddingBottom: '1rem' }}>
-        <div>
-          <h1 style={{ margin: 0, color: '#004080' }}>
-            Dashboard de Calidad - SoftQuality
-          </h1>
-          <p style={{ margin: '6px 0 0 0', color: '#475569', fontSize: '1.02rem' }}>
-            Basado en ISO/IEC 25010 y CMMI |{' '}
-            <span style={{ backgroundColor: '#dbeafe', color: '#1e40af', padding: '4px 10px', borderRadius: '6px', fontWeight: 'bold' }}>
-              Viendo: {etiquetaVista}
-            </span>
-          </p>
+    <div className="dashboard-container" style={{ padding: '2.5rem', backgroundColor: '#0f172a', minHeight: '100vh', color: '#f8fafc', fontFamily: 'Inter, sans-serif' }}>
+      <style>{estilosImpresion}</style>
+
+      {/* Título de sección */}
+      <div style={{ marginBottom: '1.5rem' }}>
+        <p style={{ color: '#06b6d4', fontSize: '0.8rem', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '0.5rem', fontWeight: '600' }}>
+          Inteligencia de Software / Análisis #{idAnalisisActual}
+        </p>
+        
+        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <h2 style={{ margin: '0 0 0.5rem 0', fontSize: '2.2rem', fontWeight: 'bold' }}>Dashboard de análisis</h2>
+            <p style={{ margin: 0, color: '#94a3b8', fontSize: '1rem' }}>
+              Diagnóstico del producto y evolución de la calidad de tu software.
+            </p>
+          </div>
+          
+          <div style={{ display: 'flex', gap: '1rem' }} className="no-print">
+            <button 
+              onClick={() => window.print()}
+              style={{ backgroundColor: 'transparent', color: '#f8fafc', border: '1px solid #334155', padding: '0.75rem 1.5rem', borderRadius: '6px', fontWeight: '500', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'background 0.2s' }}
+              onMouseOver={(e) => e.target.style.backgroundColor = '#1e293b'}
+              onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+            >
+              📥 Exportar informe PDF
+            </button>
+            <button 
+              onClick={() => setMostrarModalCMMI(true)}
+              style={{ backgroundColor: '#8b5cf6', color: 'white', border: 'none', padding: '0.75rem 1.5rem', borderRadius: '6px', fontWeight: '500', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 14px 0 rgba(139, 92, 246, 0.39)' }}
+            >
+              📋 Responder checklist CMMI
+            </button>
+          </div>
+        </header>
+      </div>
+
+      {/* Barra de Proyecto Analizado con Desplegable */}
+      <div style={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '1rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ padding: '8px', backgroundColor: '#334155', borderRadius: '6px' }}>📁</div>
+          <div>
+            <span style={{ fontSize: '0.75rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Proyecto Analizado</span>
+            <div style={{ fontSize: '1.1rem', fontWeight: '600', color: '#f8fafc', marginTop: '2px' }}>
+              {nombreProyecto || 'Cargando proyecto...'}
+            </div>
+          </div>
         </div>
         
-        <button 
-          onClick={() => setMostrarModalCMMI(true)}
-          style={{
-            backgroundColor: '#28a745', color: '#fff', border: 'none', padding: '10px 20px', 
-            borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold'
-          }}
-        >
-          📝 Responder Checklist CMMI
-        </button>
-      </header>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1.45fr 1.55fr', gap: '2rem', marginTop: '2rem' }}>
-        
-        {/* Columna Izquierda: Gráficos Cuantitativos (ISO/IEC 25010) */}
-        <section>
-          <h3>
-            📈 Evolución por Versiones — {nombreProyecto ? `Proyecto ${nombreProyecto}` : 'ISO/IEC 25010'}
-          </h3>
-          <div style={{ backgroundColor: '#fff', padding: '1rem', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', height: '420px' }}>
-            {cargando ? (
-              <p style={{ textAlign: 'center', marginTop: '100px' }}>Consultando base de datos...</p>
-            ) : datosEvolucion.length > 0 ? (
-              renderGraficaEvolucion()
-            ) : (
-              <p style={{ textAlign: 'center', marginTop: '100px', color: '#cc0000' }}>No se encontraron métricas.</p>
-            )}
-          </div>
-        </section>
-
-        {/* Columna Derecha: IA Estructurada (ISO con 4 tarjetas + CMMI) y Nivel de Madurez */}
-        <section style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          
-          {/* Contenedor Principal del Análisis Cualitativo IA */}
-          <div style={{ backgroundColor: '#f4f1fa', padding: '1.35rem', borderRadius: '10px', borderLeft: '5px solid #6b21a8', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '1rem', color: '#6b21a8', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              🧠 Análisis Cualitativo (IA) — {etiquetaVista}
-            </h3>
-
-            {/* Sub-bloque 1: ISO/IEC 25010 desglosado en las 4 características */}
-            <div style={{ backgroundColor: '#ffffff', padding: '1rem', borderRadius: '8px', borderLeft: '4px solid #3b82f6', marginBottom: '1rem', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.85rem' }}>
-                <span style={{ fontWeight: 'bold', color: '#1d4ed8', fontSize: '0.95rem' }}>
-                  📦 Calidad del Producto (Código)
-                </span>
-                <span style={{ backgroundColor: '#dbeafe', color: '#1e40af', fontSize: '0.75rem', fontWeight: 'bold', padding: '3px 8px', borderRadius: '12px' }}>
-                  ISO/IEC 25010
-                </span>
-              </div>
-
-              {/* Cuadrícula de 2x2 con las 4 características ISO separadas */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: recomendacionGeneral ? '0.85rem' : 0 }}>
-                {tarjetasISO.map((item) => (
-                  <div
-                    key={item.key}
-                    style={{
-                      backgroundColor: '#f8fafc',
-                      border: '1px solid #e2e8f0',
-                      borderLeft: `4px solid ${item.colorBorde}`,
-                      borderRadius: '7px',
-                      padding: '0.65rem 0.75rem',
-                    }}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', fontSize: '0.9rem', color: '#cbd5e1' }}>
+          <div style={{ position: 'relative' }}>
+            <div 
+              onClick={(e) => { e.stopPropagation(); setMenuVersionesAbierto(!menuVersionesAbierto); }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', border: '1px solid #334155', borderRadius: '6px', backgroundColor: '#0f172a', cursor: 'pointer', userSelect: 'none' }}
+            >
+              <span>{numeroVersionActual || 'Versión -'}</span> <span style={{ fontSize: '0.7rem' }}>{menuVersionesAbierto ? '▲' : '▼'}</span>
+            </div>
+            
+            {menuVersionesAbierto && datosEvolucion.length > 0 && (
+              <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: '4px', backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '6px', width: '100%', minWidth: '120px', zIndex: 50, overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.5)' }}>
+                {datosEvolucion.map((ver, idx) => (
+                  <div 
+                    key={idx}
+                    onClick={() => cambiarVersion(ver)}
+                    style={{ padding: '8px 12px', cursor: 'pointer', backgroundColor: ver.version === numeroVersionActual ? '#1e293b' : 'transparent', color: ver.version === numeroVersionActual ? '#f8fafc' : '#cbd5e1', fontSize: '0.85rem' }}
+                    onMouseOver={(e) => e.target.style.backgroundColor = '#1e293b'}
+                    onMouseOut={(e) => e.target.style.backgroundColor = ver.version === numeroVersionActual ? '#1e293b' : 'transparent'}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                      <span style={{ fontWeight: 'bold', fontSize: '0.84rem', color: '#1e293b' }}>
-                        {item.icono} {item.key}
-                      </span>
-                      <span
-                        style={{
-                          backgroundColor: item.colorFondoBadge,
-                          color: item.colorTextoBadge,
-                          fontWeight: 'bold',
-                          fontSize: '0.76rem',
-                          padding: '2px 7px',
-                          borderRadius: '10px',
-                        }}
-                      >
-                        {item.puntaje !== null ? `${item.puntaje}/100` : 'N/A'}
-                      </span>
-                    </div>
-
-                    {/* Mini barra visual de puntaje (0 a 100) */}
-                    {item.puntaje !== null && (
-                      <div style={{ width: '100%', backgroundColor: '#e2e8f0', height: '5px', borderRadius: '4px', marginBottom: '0.45rem', overflow: 'hidden' }}>
-                        <div
-                          style={{
-                            width: `${Math.min(100, Math.max(0, item.puntaje))}%`,
-                            backgroundColor: item.colorBorde,
-                            height: '100%',
-                          }}
-                        />
-                      </div>
-                    )}
-
-                    <p style={{ margin: 0, fontSize: '0.78rem', color: '#475569', lineHeight: '1.4' }}>
-                      {item.evidencia}
-                    </p>
+                    {ver.version}
                   </div>
                 ))}
               </div>
-
-              {/* Recuadro inferior para la recomendación general de mejora ISO 25010 */}
-              {recomendacionGeneral && (
-                <div style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '6px', padding: '0.65rem 0.8rem' }}>
-                  <p style={{ margin: 0, fontSize: '0.84rem', lineHeight: '1.45', color: '#1e3a8a' }}>
-                    <strong>💡 Recomendación técnica:</strong> {recomendacionGeneral}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Sub-bloque 2: CMMI (Madurez de Procesos del Equipo) */}
-            <div style={{ backgroundColor: '#ffffff', padding: '1rem', borderRadius: '8px', borderLeft: '4px solid #10b981', marginBottom: '0.75rem', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                <span style={{ fontWeight: 'bold', color: '#047857', fontSize: '0.95rem' }}>
-                  ⚙️ Mejora de Procesos (Equipo)
-                </span>
-                <span style={{ backgroundColor: '#d1fae5', color: '#065f46', fontSize: '0.75rem', fontWeight: 'bold', padding: '3px 8px', borderRadius: '12px' }}>
-                  Modelo CMMI
-                </span>
-              </div>
-              {analisisCMMI ? (
-                <p style={{ fontSize: '0.88rem', lineHeight: '1.55', color: '#334155', margin: 0 }}>
-                  {analisisCMMI}
-                </p>
-              ) : (
-                <p style={{ fontSize: '0.86rem', lineHeight: '1.5', color: '#64748b', fontStyle: 'italic', margin: 0 }}>
-                  Aún no se han evaluado los procesos del equipo en esta versión. Haz clic en el botón verde <strong>"📝 Responder Checklist CMMI"</strong> arriba a la derecha para que la IA genere recomendaciones sobre tu flujo de trabajo.
-                </p>
-              )}
-            </div>
-
-            <small style={{ color: '#6b7280', display: 'block', marginTop: '0.5rem' }}>
-              * La IA interpreta los datos obtenidos de forma independiente; no calcula ni inventa métricas.
-            </small>
+            )}
           </div>
-
-          {/* Tarjeta Resumen del Nivel CMMI */}
-          <div style={{ backgroundColor: '#e6f4ea', padding: '1.25rem 1.5rem', borderRadius: '10px', borderLeft: '5px solid #28a745', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-            <h3 style={{ marginTop: 0, color: '#1e7e34' }}>🏆 Madurez del Proceso (CMMI)</h3>
-            <p style={{ fontSize: '1rem', margin: '0.5rem 0' }}>
-              <strong>Nivel Actual:</strong> {nivelMadurez}
-            </p>
-            <p style={{ fontSize: '0.85rem', color: '#555', margin: 0 }}>
-              Diagnóstico académico referencial basado en las 5 áreas de proceso evaluadas (REQM, PP, PMC, CM y VER/VAL).
-            </p>
-          </div>
-
-        </section>
+          <span style={{ padding: '4px 10px', backgroundColor: '#164e63', color: '#67e8f9', borderRadius: '12px', fontSize: '0.8rem', fontWeight: '600' }}>
+            Análisis #{idAnalisisActual}
+          </span>
+          <span style={{ color: '#94a3b8' }}>ISO/IEC 25010</span>
+        </div>
       </div>
 
-      {/* Ventana Modal de Evaluación CMMI */}
-      {mostrarModalCMMI && React.createElement(FormularioCMMI, {
-        idAnalisis: idAnalisisActual,
-        alCerrar: () => setMostrarModalCMMI(false),
-        alCompletar: (nivelGenerado, nuevasRecomendaciones) => {
-          setNivelMadurez(nivelGenerado);
-          if (nuevasRecomendaciones) {
-            procesarRecomendacionesIA(nuevasRecomendaciones);
-          }
-          setMostrarModalCMMI(false);
-        }
-      })}
+      {/* 4 Tarjetas de Métricas Superiores */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem', marginBottom: '2.5rem' }}>
+        {tarjetasISO.map((item) => (
+          <div key={item.key} style={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '10px', padding: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1rem', color: '#cbd5e1', fontSize: '0.95rem' }}>
+              <span>{item.icono}</span> {item.key}
+            </div>
+            
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', marginBottom: '1rem' }}>
+              <span style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#f8fafc' }}>
+                {item.puntaje !== null ? Math.round(item.puntaje) : '--'}
+              </span>
+              <span style={{ fontSize: '1rem', color: '#64748b' }}>/100</span>
+              {item.puntaje !== null && calcularVariacion(item.key, item.puntaje)}
+            </div>
 
+            <div style={{ width: '100%', backgroundColor: '#334155', height: '6px', borderRadius: '4px', marginBottom: '1rem', overflow: 'hidden' }}>
+              <div
+                style={{
+                  width: `${item.puntaje !== null ? Math.min(100, Math.max(0, item.puntaje)) : 0}%`,
+                  backgroundColor: item.colorBorde,
+                  height: '100%',
+                  boxShadow: `0 0 10px ${item.colorBorde}80`
+                }}
+              />
+            </div>
+            <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b' }}>Calculado por el motor estático</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Gráfico y Tarjeta CMMI */}
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.5rem', marginBottom: '2.5rem' }}>
+        <div style={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '10px', padding: '1.5rem', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#f8fafc', fontWeight: '600' }}>Evolución por versiones</h3>
+            <span style={{ backgroundColor: '#334155', color: '#cbd5e1', fontSize: '0.75rem', padding: '4px 10px', borderRadius: '12px', fontWeight: '500' }}>
+              {datosEvolucion.length} versiones
+            </span>
+          </div>
+          <p style={{ margin: '0 0 1.5rem 0', fontSize: '0.85rem', color: '#94a3b8' }}>
+            {nombreProyecto || 'Proyecto'} · Escala de 0 a 100
+          </p>
+
+          <div style={{ flexGrow: 1, minHeight: '300px', width: '100%', marginBottom: '1rem' }}>
+            {cargando ? (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#94a3b8' }}>Consultando base de datos...</div>
+            ) : datosEvolucion.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={datosEvolucion} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                  <XAxis dataKey="version" stroke="#64748b" tick={{ fill: '#64748b', fontSize: 12 }} tickLine={false} axisLine={false} dy={10} />
+                  <YAxis domain={[0, 100]} stroke="#64748b" tick={{ fill: '#64748b', fontSize: 12 }} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '8px', color: '#f8fafc' }} itemStyle={{ fontWeight: '500' }} />
+                  <Legend iconType="plainline" wrapperStyle={{ paddingTop: '15px', fontSize: '0.85rem', color: '#cbd5e1' }} />
+                  <Line type="monotone" dataKey="Mantenibilidad" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 4, strokeWidth: 2, fill: '#1e293b' }} activeDot={{ r: 6, fill: '#8b5cf6' }} />
+                  <Line type="monotone" dataKey="Seguridad" stroke="#06b6d4" strokeWidth={2} dot={{ r: 4, strokeWidth: 2, fill: '#1e293b' }} activeDot={{ r: 6, fill: '#06b6d4' }} />
+                  <Line type="monotone" dataKey="Flexibilidad" stroke="#fbbf24" strokeWidth={2} dot={{ r: 4, strokeWidth: 2, fill: '#1e293b' }} activeDot={{ r: 6, fill: '#fbbf24' }} />
+                  <Line type="monotone" dataKey="Fiabilidad" stroke="#34d399" strokeWidth={2} dot={{ r: 4, strokeWidth: 2, fill: '#1e293b' }} activeDot={{ r: 6, fill: '#34d399' }} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#ef4444' }}>No se encontraron métricas.</div>
+            )}
+          </div>
+          <div style={{ paddingTop: '1rem', borderTop: '1px solid #334155', fontSize: '0.8rem', color: '#64748b' }}>
+            Estás consultando {numeroVersionActual || 'esta versión'}. El gráfico muestra el historial completo del proyecto.
+          </div>
+        </div>
+
+        <div style={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '10px', padding: '1.5rem', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
+            <div style={{ color: '#06b6d4', fontSize: '1.5rem' }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 16v-4"/><path d="M12 8h.01"/><path d="M16 4h4v4"/><path d="M4 20h4v-4"/><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>
+            </div>
+            <span style={{ backgroundColor: '#164e63', color: '#67e8f9', fontSize: '0.75rem', padding: '4px 10px', borderRadius: '12px', fontWeight: '600' }}>
+              Modelo CMMI
+            </span>
+          </div>
+          
+          <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.3rem', color: '#f8fafc', fontWeight: '600' }}>Madurez del proceso</h3>
+          
+          <div style={{ marginBottom: '1.25rem' }}>
+            <span style={{ backgroundColor: nivelMadurez.includes('Pendiente') ? '#78350f' : '#064e3b', color: nivelMadurez.includes('Pendiente') ? '#fde68a' : '#6ee7b7', padding: '6px 12px', borderRadius: '16px', fontSize: '0.8rem', fontWeight: '500', display: 'inline-block' }}>
+              {nivelMadurez}
+            </span>
+          </div>
+          
+          <div style={{ color: '#94a3b8', fontSize: '0.9rem', lineHeight: '1.6', flexGrow: 1 }}>
+            {analisisCMMI ? <p style={{ margin: 0 }}>{analisisCMMI}</p> : <p style={{ margin: 0 }}>Aún no se han evaluado los procesos del equipo en esta versión.</p>}
+          </div>
+
+          <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid #334155' }}>
+            <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.7rem', color: '#64748b', letterSpacing: '1px', textTransform: 'uppercase' }}>5 ÁREAS DE PROCESO</p>
+            <p style={{ margin: '0 0 1.5rem 0', fontSize: '0.8rem', color: '#94a3b8', letterSpacing: '1.5px', fontFamily: 'monospace' }}>REQM · PP · PMC · CM · VER/VAL</p>
+            {!analisisCMMI && (
+              <button 
+                onClick={() => setMostrarModalCMMI(true)}
+                style={{ width: '100%', backgroundColor: '#8b5cf6', color: 'white', border: 'none', padding: '0.875rem', borderRadius: '6px', fontWeight: '500', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', transition: 'background 0.2s', boxShadow: '0 4px 14px 0 rgba(139, 92, 246, 0.2)' }}
+                onMouseOver={(e) => e.target.style.backgroundColor = '#7c3aed'}
+                onMouseOut={(e) => e.target.style.backgroundColor = '#8b5cf6'}
+              >
+                📋 Responder checklist CMMI
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Análisis Cualitativo 2x2 */}
+      <div style={{ marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '1.5rem' }}>
+          <div>
+            <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.5rem', color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              ✨ Análisis cualitativo y recomendaciones
+            </h3>
+            <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.9rem' }}>
+              Hallazgos del código organizados por atributo. Las puntuaciones corresponden exclusivamente a la versión actual.
+            </p>
+          </div>
+          <span style={{ backgroundColor: '#1e293b', color: '#cbd5e1', border: '1px solid #334155', fontSize: '0.75rem', padding: '6px 12px', borderRadius: '16px', fontWeight: '500' }}>
+            IA · {numeroVersionActual || 'Versión Actual'}
+          </span>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+          {tarjetasISO.map((item) => (
+            <div key={`cualitativo-${item.key}`} style={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '10px', padding: '1.5rem', borderLeft: `4px solid ${item.colorBorde}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <h4 style={{ margin: 0, fontSize: '1.2rem', color: '#f8fafc' }}>{item.key}</h4>
+                <span style={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: item.colorBorde, fontSize: '0.8rem', padding: '4px 10px', borderRadius: '12px', fontWeight: '600' }}>
+                  {item.puntaje !== null ? `${Math.round(item.puntaje)}/100` : 'N/A'}
+                </span>
+              </div>
+              <div style={{ color: '#cbd5e1', fontSize: '0.9rem', lineHeight: '1.6' }}>
+                <p style={{ margin: 0 }}>{item.evidencia}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {recomendacionGeneral && (
+          <div style={{ marginTop: '1.5rem', backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '10px', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ color: '#8b5cf6' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+              </span>
+              <h4 style={{ margin: 0, fontSize: '1.1rem', color: '#f8fafc' }}>Prepara tu siguiente versión</h4>
+            </div>
+            <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.9rem', lineHeight: '1.5' }}>{recomendacionGeneral}</p>
+            <div style={{ marginTop: '0.5rem' }}>
+              <button 
+                onClick={() => window.location.href='/subir'} 
+                style={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#f8fafc', padding: '0.6rem 1rem', borderRadius: '6px', fontSize: '0.85rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', transition: 'background 0.2s' }}
+                onMouseOver={(e) => e.target.style.backgroundColor = '#334155'}
+                onMouseOut={(e) => e.target.style.backgroundColor = '#0f172a'}
+              >
+                <span style={{ fontSize: '1.1rem' }}>+</span> Subir nueva versión
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div style={{ borderTop: '1px solid #334155', paddingTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.2rem', color: '#64748b', fontSize: '0.8rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+          <span>La IA interpreta las métricas ya calculadas; no calcula ni inventa métricas y no reemplaza la evaluación.</span>
+        </div>
+        <div style={{ backgroundColor: '#1e293b', border: '1px solid #334155', padding: '1.2rem', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span>Diagnóstico académico referencial de calidad y mejora continua. Las referencias a ISO/IEC 25010 y CMMI no representan una certificación oficial ISO ni CMMI.</span>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #334155', marginTop: '2.5rem', paddingTop: '1.5rem', color: '#475569', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '1px' }}>
+        <span>SoftQuality / Inteligencia de Software</span>
+        <span>Diagnóstico académico · Mejora continua</span>
+      </div>
+
+      {/* Ventana Modal de Evaluación CMMI con color de texto oscuro forzado */}
+      {mostrarModalCMMI && (
+        <div style={{ color: '#0f172a' }}>
+          <FormularioCMMI 
+            idAnalisis={idAnalisisActual}
+            alCerrar={() => setMostrarModalCMMI(false)}
+            alCompletar={(nivelGenerado, nuevasRecomendaciones) => {
+              setNivelMadurez(nivelGenerado);
+              if (nuevasRecomendaciones) {
+                procesarRecomendacionesIA(nuevasRecomendaciones);
+              }
+              setMostrarModalCMMI(false);
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 };

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { mensajeError } from "../services/api";
+// Restauramos la línea vital para no descuadrar el diseño de tus compañeros
 import { TarjetaAuth, Campo, MensajeError, BotonPrincipal, BLUE, INK_SOFT } from "../components/AuthUI";
 
 export default function Login() {
@@ -52,7 +53,7 @@ export default function Login() {
         </BotonPrincipal>
       </form>
 
-      <p style={{ fontSize: 13, color: INK_SOFT, margin: "18px 0 0" }}>
+      <p style={{ fontSize: 13, color: INK_SOFT, margin: "18px 0 0", textAlign: "center" }}>
         ¿No tienes cuenta?{" "}
         <Link to="/registrarse" className="sq-enlace" style={{ color: BLUE, fontWeight: 600 }}>
           Crear cuenta
